@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+
+import { spawn, spawnSync } from "node:child_process"
+import os from "node:os"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
+// Keep the package shim safe even when it is invoked directly instead of via
+// scripts/ocarina. The compiled child inherits this environment.
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith("OPENCODE_")) delete process.env[key]
+}
+
+const runtime = path.resolve(process.env.OCARINA_RUNTIME_DIR || path.join(os.homedir(), ".local", "share", "ocarina"))
+process.env.OCARINA_RUNTIME_DIR = runtime
+process.env.HOME = path.join(runtime, "home")
+process.env.XDG_CONFIG_HOME = path.join(runtime, "config")
+process.env.XDG_DATA_HOME = path.join(runtime, "data")
+process.env.XDG_STATE_HOME = path.join(runtime, "state")
+process.env.XDG_CACHE_HOME = path.join(runtime, "cache")
+process.env.TMPDIR = path.join(runtime, "tmp")
+process.env.TMP = path.join(runtime, "tmp")
+process.env.TEMP = path.join(runtime, "tmp")
+process.env.OCARINA_MODE = "1"
+
+const sourceEntrypoint = fileURLToPath(new URL("../src/index.ts", import.meta.url))
+const args = process.argv.slice(2)
+
+if (process.versions.bun) {
+  await import(sourceEntrypoint)
+} else {
+  // Node does not execute the source tree's TypeScript and Bun-compatible
+  // imports. Use Bun for the source entrypoint while keeping this executable
+  // itself valid in the package's ESM scope.
+  const bun = process.env.OCARINA_BUN_PATH || "bun"
+  const available = spawnSync(bun, ["--version"], { stdio: "ignore" }).status === 0
+  if (!available) {
+    if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
+      console.log("Ocarina/local")
+      process.exitCode = 0
+    } else if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+      console.log(`Usage: ocarina\n\nOptions:\n  --help, -h       Show help\n  --version, -v    Show version number\n\nTUI options:\n  --model, -m      Model to use\n  --continue, -c   Continue the last session\n  --session, -s    Session id to continue\n  --fork           Fork the continued session\n  --prompt         Prompt to use`)
+      process.exitCode = 0
+    } else {
+      console.error("ocarina: Bun is required to run the source CLI")
+      process.exitCode = 1
+    }
+  } else {
+    const child = spawn(bun, ["run", sourceEntrypoint, ...args], {
+      stdio: "inherit",
+      env: process.env,
+    })
+
+    const forwardedSignals = ["SIGINT", "SIGTERM", "SIGHUP"]
+    const forwarders = new Map()
+    for (const signal of forwardedSignals) {
+      const forward = () => child.kill(signal)
+      forwarders.set(signal, forward)
+      process.on(signal, forward)
+    }
+
+    await new Promise((resolve) => {
+      child.on("error", (error) => {
+        console.error(`ocarina: unable to start Bun (${error.message})`)
+        process.exitCode = 1
+        resolve()
+      })
+      child.on("exit", (code, signal) => {
+        for (const [forwardedSignal, forward] of forwarders) {
+          process.removeListener(forwardedSignal, forward)
+        }
+        if (signal) process.kill(process.pid, signal)
+        else process.exitCode = code ?? 1
+        resolve()
+      })
+    })
+  }
+}

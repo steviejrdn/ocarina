@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ocarina — Launch Slate</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #111315;
+        --surface: #171a1e;
+        --surface-2: #1d2126;
+        --rule: #333a44;
+        --rule-soft: #252b32;
+        --text: #e7e9ec;
+        --muted: #8f98a3;
+        --quiet: #68727e;
+        --active: #79a8ff;
+        --active-soft: #1e2c45;
+        --shadow: 0 30px 80px rgb(0 0 0 / 0.34);
+      }
+      [data-theme="light"] {
+        color-scheme: light;
+        --canvas: #f7f7f5;
+        --surface: #fff;
+        --surface-2: #f1f2f3;
+        --rule: #d2d5d9;
+        --rule-soft: #e7e9eb;
+        --text: #15181c;
+        --muted: #69717b;
+        --quiet: #8b939d;
+        --active: #2563eb;
+        --active-soft: #e7efff;
+        --shadow: 0 24px 60px rgb(42 48 56 / 0.14);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--canvas);
+        color: var(--text);
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          monospace;
+        margin: 0;
+        min-width: 320px;
+      }
+      button {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 5px;
+        color: var(--muted);
+        cursor: pointer;
+        font: inherit;
+        font-size: 11px;
+        padding: 6px 9px;
+      }
+      button:hover,
+      button[aria-pressed="true"] {
+        border-color: var(--active);
+        color: var(--text);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--active);
+        outline-offset: 2px;
+      }
+      .review {
+        align-items: center;
+        display: flex;
+        gap: 18px;
+        justify-content: space-between;
+        margin: auto;
+        max-width: 1260px;
+        padding: 18px 24px;
+      }
+      .review-title {
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .controls span {
+        align-self: center;
+        color: var(--quiet);
+        font-size: 10px;
+        margin-left: 8px;
+        text-transform: uppercase;
+      }
+      .frame {
+        background: var(--canvas);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        margin: 0 auto;
+        max-width: 1260px;
+        min-height: 680px;
+        overflow: hidden;
+        transition: max-width 0.25s ease;
+      }
+      .frame.narrow {
+        max-width: 720px;
+      }
+      .topline {
+        align-items: center;
+        border-bottom: 1px solid var(--rule-soft);
+        display: flex;
+        justify-content: space-between;
+        min-height: 45px;
+        padding: 0 24px;
+      }
+      .identity {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .identity b {
+        color: var(--active);
+        font-weight: 600;
+      }
+      .top-hint {
+        color: var(--quiet);
+        font-size: 11px;
+      }
+      .launch {
+        display: grid;
+        grid-template-columns: minmax(210px, 0.42fr) minmax(420px, 1fr);
+        min-height: 635px;
+      }
+      .identity-zone {
+        border-right: 1px solid var(--rule-soft);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 54px 34px 30px;
+      }
+      .logo {
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.45;
+        margin: 0;
+        white-space: pre;
+      }
+      .logo-label {
+        color: var(--quiet);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        margin-top: 18px;
+        text-transform: uppercase;
+      }
+      .identity-note {
+        color: var(--muted);
+        font-size: 12px;
+        max-width: 185px;
+      }
+      .identity-note b {
+        color: var(--text);
+        display: block;
+        font-weight: 500;
+        margin-bottom: 6px;
+      }
+      .command-zone {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 36px 58px;
+      }
+      .command-kicker {
+        color: var(--quiet);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+      }
+      .command-zone h1 {
+        font-size: clamp(18px, 2.4vw, 28px);
+        font-weight: 400;
+        letter-spacing: -0.04em;
+        line-height: 1.2;
+        margin: 0 0 28px;
+        max-width: 540px;
+      }
+      .composer {
+        border-left: 2px solid var(--active);
+        background: var(--surface);
+        padding: 16px 18px 13px;
+      }
+      .prompt {
+        color: var(--text);
+        min-height: 28px;
+      }
+      .prompt .cursor {
+        color: var(--active);
+      }
+      .meta {
+        align-items: center;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        font-size: 11px;
+        gap: 10px;
+        justify-content: space-between;
+        margin-top: 18px;
+      }
+      .meta b {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .meta .hint {
+        color: var(--quiet);
+      }
+      .recent {
+        border-top: 1px solid var(--rule-soft);
+        display: flex;
+        gap: 13px;
+        margin-top: 34px;
+        padding-top: 14px;
+      }
+      .recent-label {
+        color: var(--quiet);
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .recent-value {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .footer {
+        border-top: 1px solid var(--rule-soft);
+        color: var(--quiet);
+        display: flex;
+        font-size: 11px;
+        justify-content: space-between;
+        padding: 14px 24px;
+      }
+      .frame.narrow .launch {
+        display: block;
+        min-height: 635px;
+      }
+      .frame.narrow .identity-zone {
+        align-items: center;
+        border-bottom: 1px solid var(--rule-soft);
+        border-right: 0;
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+        justify-content: flex-start;
+        padding: 20px 24px;
+      }
+      .frame.narrow .logo {
+        font-size: 11px;
+      }
+      .frame.narrow .logo-label {
+        display: none;
+      }
+      .frame.narrow .identity-note {
+        max-width: none;
+      }
+      .frame.narrow .identity-note b {
+        display: inline;
+        margin-right: 7px;
+      }
+      .frame.narrow .command-zone {
+        padding: 54px 24px 28px;
+      }
+      .frame.narrow .command-zone h1 {
+        font-size: 20px;
+      }
+      @media (max-width: 680px) {
+        .review {
+          align-items: flex-start;
+          flex-direction: column;
+          padding: 14px 16px;
+        }
+        .frame {
+          margin: 0 10px;
+        }
+        .topline {
+          padding: 0 16px;
+        }
+        .top-hint {
+          display: none;
+        }
+        .launch {
+          display: block;
+        }
+        .identity-zone {
+          align-items: center;
+          border-bottom: 1px solid var(--rule-soft);
+          border-right: 0;
+          flex-direction: row;
+          gap: 16px;
+          padding: 20px 16px;
+        }
+        .logo {
+          font-size: 10px;
+        }
+        .logo-label {
+          display: none;
+        }
+        .identity-note {
+          max-width: none;
+        }
+        .identity-note b {
+          display: inline;
+          margin-right: 6px;
+        }
+        .command-zone {
+          padding: 42px 16px 24px;
+        }
+        .command-zone h1 {
+          font-size: 19px;
+        }
+        .footer {
+          padding: 12px 16px;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <header class="review" aria-label="Design review controls">
+      <div class="review-title">Ocarina / launch slate</div>
+      <div class="controls">
+        <span>Frame</span>
+        <button type="button" data-frame="wide" aria-pressed="true">Desktop</button>
+        <button type="button" data-frame="narrow" aria-pressed="false">Narrow</button>
+        <span>Surface</span>
+        <button type="button" data-theme-choice="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="frame" aria-label="Ocarina launch slate prototype">
+        <div class="topline">
+          <div class="identity"><b>O</b>&nbsp; Ocarina&nbsp; · &nbsp;ready</div>
+          <div class="top-hint">^K commands&nbsp;&nbsp;^Q quit</div>
+        </div>
+        <div class="launch">
+          <aside class="identity-zone" aria-label="Ocarina identity">
+            <div>
+              <pre class="logo" aria-label="Ocarina">
+▄▀▀▄ ▄▀▀▄  ▀▀▄ ▄▀▀▄ █ █▀▀▄  ▀▀▄
+█  █ █  ▄ █▀▀█ █    █ █  █ █▀▀█
+ ▀▀   ▀▀  ▀▀▀▀ ▀    ▀ ▀  ▀ ▀▀▀▀</pre
+              >
+              <div class="logo-label">Ocarina terminal</div>
+            </div>
+            <div class="identity-note"><b>Make the next move.</b>Start with a question, a file, or a decision.</div>
+          </aside>
+          <section class="command-zone" aria-label="Prompt command surface">
+            <div class="command-kicker">New session</div>
+            <h1>What should we work through?</h1>
+            <div class="composer" tabindex="0">
+              <div class="prompt"><span class="cursor">&gt;</span>&nbsp; Ask a research question…</div>
+              <div class="meta">
+                <span><b>Research</b>&nbsp;&nbsp;·&nbsp;&nbsp;claude-sonnet&nbsp;&nbsp;·&nbsp;&nbsp;auto</span
+                ><span class="hint">⏎ send&nbsp;&nbsp;↑↓ history</span>
+              </div>
+            </div>
+            <div class="recent">
+              <span class="recent-label">Resume</span
+              ><span class="recent-value">/sessions&nbsp; · &nbsp;continue a previous thread</span>
+            </div>
+          </section>
+        </div>
+        <footer class="footer">
+          <span>Ocarina · /sessions · /status</span><span>quiet workspace / no active session</span>
+        </footer>
+      </section>
+    </main>
+
+    <script>
+      const frame = document.querySelector(".frame")
+      const press = (selector, key, value) =>
+        document.querySelectorAll(selector).forEach((button) => {
+          button.setAttribute("aria-pressed", button.dataset[key] === value ? "true" : "false")
+        })
+      document.querySelectorAll("[data-frame]").forEach((button) =>
+        button.addEventListener("click", () => {
+          const narrow = button.dataset.frame === "narrow"
+          frame.classList.toggle("narrow", narrow)
+          press("[data-frame]", "frame", button.dataset.frame)
+        }),
+      )
+      document.querySelectorAll("[data-theme-choice]").forEach((button) =>
+        button.addEventListener("click", () => {
+          document.body.dataset.theme = button.dataset.themeChoice
+          press("[data-theme-choice]", "themeChoice", button.dataset.themeChoice)
+        }),
+      )
+    </script>
+  </body>
+</html>

@@ -1,0 +1,135 @@
+/** Commands exposed by the Ocarina TUI. Keep this list local to the UI layer. */
+export const OCARINA_COMMAND_ALLOWLIST = new Set([
+  "command.palette.show",
+  "session.list",
+  "session.new",
+  "session.interrupt",
+  "session.quick_switch.1",
+  "session.quick_switch.2",
+  "session.quick_switch.3",
+  "session.quick_switch.4",
+  "session.quick_switch.5",
+  "session.quick_switch.6",
+  "session.quick_switch.7",
+  "session.quick_switch.8",
+  "session.quick_switch.9",
+  "model.list",
+  "model.cycle_recent",
+  "model.cycle_recent_reverse",
+  "model.cycle_favorite",
+  "model.cycle_favorite_reverse",
+  "provider.connect",
+  "ocarina.status",
+  "variant.cycle",
+  "variant.list",
+  "theme.switch",
+  "theme.switch_mode",
+  "theme.mode.lock",
+  "help.show",
+  "app.exit",
+  "terminal.title.toggle",
+  "permission.mode",
+  "prompt.clear",
+  "prompt.submit",
+  "prompt.paste",
+  "session.interrupt",
+  "prompt.stash",
+  "prompt.stash.pop",
+  "prompt.stash.list",
+  "prompt.history.previous",
+  "prompt.history.next",
+  "session.rename",
+  "session.delete",
+  "session.compact",
+  "session.timeline",
+  "session.toggle.timestamps",
+  "session.toggle.thinking",
+  "session.first",
+  "session.last",
+  "session.messages_last_user",
+  "session.message.next",
+  "session.message.previous",
+  "session.page.up",
+  "session.page.down",
+  "session.line.up",
+  "session.line.down",
+  "session.half.page.up",
+  "session.half.page.down",
+  "messages.copy",
+  "message.copy",
+  "session.copy",
+  "dialog.select.prev",
+  "dialog.select.next",
+  "dialog.select.page_up",
+  "dialog.select.page_down",
+  "dialog.select.home",
+  "dialog.select.end",
+  "dialog.select.submit",
+  "dialog.prompt.submit",
+  "input.newline",
+  "input.undo",
+  "input.redo",
+  "permission.prompt.fullscreen",
+  "stash.delete",
+  "model.dialog.provider",
+  "model.dialog.favorite",
+  "prompt.autocomplete.prev",
+  "prompt.autocomplete.next",
+  "prompt.autocomplete.hide",
+  "prompt.autocomplete.select",
+  "prompt.autocomplete.complete",
+])
+
+export const OCARINA_SLASH_ALLOWLIST = new Set([
+  "new",
+  "clear",
+  "sessions",
+  "resume",
+  "continue",
+  "model",
+  "models",
+  "provider",
+  "connect",
+  "status",
+  "help",
+  "theme",
+  "themes",
+  "quit",
+  "q",
+])
+
+export const OCARINA_LOCAL_SLASH_COMMANDS = {
+  new: "session.new",
+  clear: "session.new",
+  sessions: "session.list",
+  resume: "session.list",
+  continue: "session.list",
+  model: "model.list",
+  models: "model.list",
+  provider: "provider.connect",
+  connect: "provider.connect",
+  status: "ocarina.status",
+  theme: "theme.switch",
+  themes: "theme.switch",
+  help: "help.show",
+  quit: "app.exit",
+  q: "app.exit",
+} as const
+
+export const OCARINA_ROUTE_ALLOWLIST = new Set(["home", "session"])
+
+export function assertOcarinaCommandAllowed(name: string) {
+  if (!OCARINA_COMMAND_ALLOWLIST.has(name)) {
+    throw new Error(`Command is not available in the Ocarina TUI: ${name}`)
+  }
+}
+
+export function isOcarinaSlashCommand(name: string) {
+  return OCARINA_SLASH_ALLOWLIST.has(name)
+}
+
+export function assertOcarinaRouteAllowed(name: string) {
+  if (!OCARINA_ROUTE_ALLOWLIST.has(name)) {
+    throw new Error(`Route is not available in the Ocarina TUI: ${name}`)
+  }
+}

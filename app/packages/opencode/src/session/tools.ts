@@ -1,0 +1,121 @@
+import { Agent } from "@/agent/agent"
+import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Provider } from "@/provider/provider"
+import { ProviderTransform } from "@/provider/transform"
+import { Permission } from "@/permission"
+import { Tool } from "@/tool/tool"
+import { ToolJsonSchema } from "@/tool/json-schema"
+import { ToolRegistry } from "@/tool/registry"
+
+import { Plugin } from "@/plugin"
+import type { TaskPromptOps } from "@/tool/task"
+import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions } from "ai"
+import { Effect } from "effect"
+import { MessageV2 } from "./message-v2"
+import { Session } from "./session"
+import { SessionProcessor } from "./processor"
+import { PartID } from "./schema"
+import { EffectBridge } from "@/effect/bridge"
+import { ProviderV2 } from "@opencode-ai/core/provider"
+import { ModelV2 } from "@opencode-ai/core/model"
+
+export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
+  agent: Agent.Info
+  model: Provider.Model
+  session: Session.Info
+  processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
+  bypassAgentCheck: boolean
+  messages: SessionV1.WithParts[]
+  promptOps: TaskPromptOps
+}) {
+  const tools: Record<string, AITool> = {}
+  const run = yield* EffectBridge.make()
+  const plugin = yield* Plugin.Service
+  const permission = yield* Permission.Service
+  const registry = yield* ToolRegistry.Service
+
+  const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
+    sessionID: input.session.id,
+    abort: options.abortSignal!,
+    messageID: input.processor.message.id,
+    callID: options.toolCallId,
+    extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, promptOps: input.promptOps },
+    agent: input.agent.name,
+    messages: input.messages,
+    metadata: (val) =>
+      input.processor.updateToolCall(options.toolCallId, (match) => {
+        if (!["running", "pending"].includes(match.state.status)) return match
+        return {
+          ...match,
+          state: {
+            title: val.title,
+            metadata: val.metadata,
+            status: "running",
+            input: args,
+            time: { start: Date.now() },
+          },
+        }
+      }),
+    ask: (req) =>
+      permission
+        .ask({
+          ...req,
+          sessionID: input.session.id,
+          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+        })
+        .pipe(Effect.orDie),
+  })
+
+  const visible = yield* registry.tools({
+    modelID: ModelV2.ID.make(input.model.api.id),
+    providerID: input.model.providerID,
+    agent: input.agent,
+    permission: input.session.permission,
+  })
+
+  // The session boundary is authoritative too: a replacement registry or
+  // plugin hook cannot smuggle local, coding, or MCP tools into the model.
+  for (const item of visible.filter((item) => ToolRegistry.isResearchTool(item.id))) {
+    const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
+    tools[item.id] = tool({
+      description: item.description,
+      inputSchema: jsonSchema(schema),
+      execute(args, options) {
+        return run.promise(
+          Effect.gen(function* () {
+            const ctx = context(args, options)
+            yield* plugin.trigger(
+              "tool.execute.before",
+              { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
+              { args },
+            )
+            const result = yield* item.execute(args, ctx)
+            const output = {
+              ...result,
+              attachments: result.attachments?.map((attachment) => ({
+                ...attachment,
+                id: PartID.ascending(),
+                sessionID: ctx.sessionID,
+                messageID: input.processor.message.id,
+              })),
+            }
+            yield* plugin.trigger(
+              "tool.execute.after",
+              { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
+              output,
+            )
+            if (options.abortSignal?.aborted) {
+              yield* input.processor.completeToolCall(options.toolCallId, output)
+            }
+            return output
+          }),
+        )
+      },
+    })
+  }
+
+  return tools
+})
+
+export * as SessionTools from "./tools"
