@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Capture the user's real home and the directory they invoked Ocarina from
+# before we override HOME/XDG_* for runtime isolation.
+real_home="${HOME:-}"
+project_dir="${PWD:-$(pwd -P)}"
+
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 runtime_dir="${OCARINA_RUNTIME_DIR:-${root_dir}/runtime}"
 read_runtime_dir=false
@@ -27,6 +32,8 @@ fi
 mkdir -p "${runtime_dir}"/{config,data,state,cache,logs,tmp,home}
 
 export OCARINA_RUNTIME_DIR="${runtime_dir}"
+export OCARINA_REAL_HOME="${real_home}"
+export OCARINA_PROJECT_DIR="${project_dir}"
 export HOME="${runtime_dir}/home"
 export XDG_CONFIG_HOME="${runtime_dir}/config"
 export XDG_DATA_HOME="${runtime_dir}/data"
@@ -36,6 +43,7 @@ export TMPDIR="${runtime_dir}/tmp"
 export TMP="${runtime_dir}/tmp"
 export TEMP="${runtime_dir}/tmp"
 export OCARINA_MODE=1
+export OCARINA_VERSION="0.1.0"
 
 # Set the title before Bun/OpenCode has a chance to publish its source-runner
 # title. The TUI also keeps the title branded after the renderer starts.

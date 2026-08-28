@@ -11,6 +11,13 @@ export const ocarinaAscii = [
   " ▀▀   ▀▀  ▀▀▀▀ ▀    ▀ ▀  ▀ ▀▀▀▀",
 ] as const
 
+// Compact rail mark (O-C-R-N) for the workbench sidebar.
+export const ocarinaMark = [
+  "▄▀▀▄ ▄▀▀▄ ▄▀▀▄ █▀▀▄",
+  "█  █ █  ▄ █    █  █",
+  " ▀▀   ▀▀  ▀    ▀  ▀",
+] as const
+
 export const go = {
   left: ["    ", "█▀▀▀", "█_^█", "▀▀▀▀"],
   right: ["    ", "█▀▀█", "█__█", "▀▀▀▀"],

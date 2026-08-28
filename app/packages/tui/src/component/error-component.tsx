@@ -4,7 +4,7 @@ import { createSignal, For, Show } from "solid-js"
 import { getScrollAcceleration } from "../util/scroll"
 import { BRAND } from "../branding"
 import { useClipboard } from "../context/clipboard"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { OcarinaVersion } from "@opencode-ai/core/installation/version"
 import { useExit } from "../context/exit"
 import { describeOS, describeTerminal } from "../util/system"
 
@@ -193,7 +193,7 @@ export function ErrorComponent(props: { error: Error; reset: () => void; mode?: 
                 ? "Report copied — paste it into a new GitHub issue."
                 : "Copy the report and open a GitHub issue to help us fix this."}
             </text>
-            <text fg={colors.muted}>{BRAND.name} {InstallationVersion}</text>
+            <text fg={colors.muted}>{BRAND.name} {OcarinaVersion}</text>
           </box>
         </Show>
       </box>
@@ -207,7 +207,7 @@ function buildIssueURL(message: string, stack: string) {
   // the contributing-guidelines compliance check, which pushes for system info.
   const url = new URL("https://github.com/anomalyco/opencode/issues/new?template=bug-report.yml")
   url.searchParams.set("title", `TUI crash: ${message}`)
-  url.searchParams.set("opencode-version", InstallationVersion)
+  url.searchParams.set("ocarina-version", OcarinaVersion)
   url.searchParams.set("os", describeOS())
   url.searchParams.set("terminal", describeTerminal())
   url.searchParams.set(

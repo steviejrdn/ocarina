@@ -9,7 +9,7 @@ export function Logo() {
   const wideEnough = () => dimensions().width >= 42
 
   return (
-    <box alignItems="center" aria-label="Ocarina">
+    <box alignItems="flex-start" aria-label="Ocarina">
       <Show
         when={wideEnough()}
         fallback={

@@ -36,7 +36,7 @@ if (process.versions.bun) {
   const available = spawnSync(bun, ["--version"], { stdio: "ignore" }).status === 0
   if (!available) {
     if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
-      console.log("Ocarina/local")
+      console.log(`Ocarina/${process.env.OCARINA_VERSION ?? "0.1.0"}`)
       process.exitCode = 0
     } else if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
       console.log(`Usage: ocarina\n\nOptions:\n  --help, -h       Show help\n  --version, -v    Show version number\n\nTUI options:\n  --model, -m      Model to use\n  --continue, -c   Continue the last session\n  --session, -s    Session id to continue\n  --fork           Fork the continued session\n  --prompt         Prompt to use`)

@@ -1,11 +1,11 @@
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import { InstallationLocal, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { OcarinaVersion } from "@opencode-ai/core/installation/version"
 
 const args = hideBin(process.argv)
-const OcarinaVersion = InstallationLocal ? "Ocarina/local" : `Ocarina/${InstallationVersion}`
+const OcarinaVersionString = `Ocarina/${OcarinaVersion}`
 
-const valueOptions = new Set(["--model", "-m", "--session", "-s", "--prompt"])
+const valueOptions = new Set(["--model", "-m", "--session", "-s", "--prompt", "--directory", "-d"])
 const flagOptions = new Set(["--help", "-h", "--version", "-v", "--continue", "-c", "--fork"])
 let expectsValue = false
 const invalidArgument = args.some((arg) => {
@@ -22,6 +22,7 @@ const invalidArgument = args.some((arg) => {
     arg.startsWith("--model=") ||
     arg.startsWith("--session=") ||
     arg.startsWith("--prompt=") ||
+    arg.startsWith("--directory=") ||
     flagOptions.has(arg)
   )
     return false
@@ -43,7 +44,7 @@ try {
     .usage("$0")
     .help("help", "show help")
     .alias("help", "h")
-    .version("version", "show version number", OcarinaVersion)
+    .version("version", "show version number", OcarinaVersionString)
     .alias("version", "v")
     .command(TuiThreadCommand)
     .strict()
