@@ -20,6 +20,7 @@ export const OCARINA_COMMAND_ALLOWLIST = new Set([
   "model.cycle_favorite_reverse",
   "provider.connect",
   "ocarina.status",
+  "project.open",
   "variant.cycle",
   "variant.list",
   "theme.switch",
@@ -44,6 +45,7 @@ export const OCARINA_COMMAND_ALLOWLIST = new Set([
   "session.timeline",
   "session.toggle.timestamps",
   "session.toggle.thinking",
+  "session.toggle.sidebar",
   "session.first",
   "session.last",
   "session.messages_last_user",
@@ -94,8 +96,11 @@ export const OCARINA_SLASH_ALLOWLIST = new Set([
   "help",
   "theme",
   "themes",
+  "open",
   "quit",
   "q",
+  "sidebar",
+  "toggle-sidebar",
 ])
 
 export const OCARINA_LOCAL_SLASH_COMMANDS = {
@@ -111,6 +116,7 @@ export const OCARINA_LOCAL_SLASH_COMMANDS = {
   status: "ocarina.status",
   theme: "theme.switch",
   themes: "theme.switch",
+  open: "project.open",
   help: "help.show",
   quit: "app.exit",
   q: "app.exit",

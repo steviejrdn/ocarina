@@ -47,6 +47,7 @@ import type { PromptInfo } from "../../component/prompt/history"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { filetype } from "../../util/filetype"
+import { ocarinaMark } from "../../logo"
 import parsers from "../../parsers-config"
 import { errorMessage } from "../../util/error"
 import { Toast, useToast } from "../../ui/toast"
@@ -71,7 +72,6 @@ import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap 
 import { usePathFormatter } from "../../context/path-format"
 import { LocationProvider } from "../../context/location"
 import { assertOcarinaCommandAllowed } from "../../prompt/commands"
-import { BRAND } from "../../branding"
 
 addDefaultParsers(parsers.parsers)
 
@@ -83,6 +83,7 @@ const sessionBindingCommands = [
   "session.compact",
   "session.toggle.timestamps",
   "session.toggle.thinking",
+  "session.toggle.sidebar",
   "session.first",
   "session.last",
   "session.messages_last_user",
@@ -189,6 +190,7 @@ export function Session() {
   const showTimestamps = createMemo(() => timestamps() === "show")
   const contentWidth = createMemo(() => dimensions().width - 4)
   const showWorkbench = createMemo(() => dimensions().width >= 110)
+  const [showSidebar, setShowSidebar] = kv.signal("sidebar_visibility", true)
   const providers = createMemo(() => Model.index(sync.data.provider))
   const recentSessions = createMemo(() =>
     sync.data.session
@@ -393,6 +395,19 @@ export function Session() {
       },
       run: () => {
         thinking.set(nextThinkingMode(thinkingMode()))
+        dialog.clear()
+      },
+    },
+    {
+      title: showSidebar() ? "Hide sidebar" : "Show sidebar",
+      value: "session.toggle.sidebar",
+      category: "Session",
+      slash: {
+        name: "sidebar",
+        aliases: ["toggle-sidebar"],
+      },
+      run: () => {
+        setShowSidebar((prev) => !prev)
         dialog.clear()
       },
     },
@@ -648,24 +663,8 @@ export function Session() {
         }}
       >
         <box flexDirection="column" flexGrow={1} minHeight={0}>
-          <box
-            height={1}
-            flexShrink={0}
-            paddingLeft={2}
-            paddingRight={2}
-            flexDirection="row"
-            justifyContent="space-between"
-          >
-            <text fg={theme.text} wrapMode="none">
-              <span style={{ fg: theme.primary, bold: true }}>{BRAND.name}</span>
-              <span style={{ fg: theme.textMuted }}> · {project.instance.directory()}</span>
-            </text>
-            <text fg={theme.textMuted} wrapMode="none">
-              {Locale.truncate(session()?.title ?? "Session", 42)}
-            </text>
-          </box>
           <box flexDirection="row" flexGrow={1} minHeight={0}>
-            <Show when={showWorkbench()}>
+            <Show when={showWorkbench() && showSidebar()}>
               <WorkbenchRail
                 directory={project.instance.directory()}
                 agent={local.agent.current()?.name}
@@ -779,7 +778,7 @@ function WorkbenchRail(props: {
 
   return (
     <box
-      width={25}
+      width={30}
       flexShrink={0}
       paddingTop={2}
       paddingLeft={2}
@@ -788,6 +787,15 @@ function WorkbenchRail(props: {
       borderColor={theme.borderSubtle}
       gap={2}
     >
+      <box>
+        <For each={ocarinaMark}>
+          {(line) => (
+            <text fg={theme.primary} selectable={false} wrapMode="none">
+              {line}
+            </text>
+          )}
+        </For>
+      </box>
       <box>
         <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
           PROJECT

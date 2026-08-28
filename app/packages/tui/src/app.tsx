@@ -45,6 +45,7 @@ import { DialogStatus } from "./component/dialog-status"
 import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogSessionList } from "./component/dialog-session-list"
+import { DialogOpenProject } from "./component/dialog-open-project"
 import { ThemeProvider, useTheme } from "./context/theme"
 import { Home } from "./routes/home"
 import { Session } from "./routes/session"
@@ -137,6 +138,10 @@ function errorMessage(error: unknown) {
     return error.data.message
   }
   return error instanceof Error ? error.message : String(error)
+}
+
+function isReopenReason(reason: unknown): reason is { type: "reopen"; directory: string } {
+  return typeof reason === "object" && reason !== null && (reason as { type?: string }).type === "reopen"
 }
 
 function setOcarinaTerminalTitle(renderer: Pick<CliRenderer, "setTerminalTitle">) {
@@ -318,7 +323,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   )
   yield* Effect.sync(() => {
     win32FlushInputBuffer()
-    if (result.reason !== undefined)
+    if (result.reason !== undefined && !isReopenReason(result.reason))
       process.stderr.write((cliErrorMessage(result.reason) ?? errorFormat(result.reason)) + "\n")
     if (result.epilogue) process.stdout.write(result.epilogue + "\n")
   })
@@ -483,6 +488,15 @@ function App() {
             type: "home",
           })
           dialog.clear()
+        },
+      },
+      {
+        name: "project.open",
+        title: "Open project folder",
+        category: "Project",
+        slashName: "open",
+        run: () => {
+          dialog.replace(() => <DialogOpenProject />)
         },
       },
       ...Array.from({ length: 9 }, (_, i) => ({
