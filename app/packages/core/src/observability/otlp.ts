@@ -1,7 +1,7 @@
 import { Layer } from "effect"
 import { OtlpLogger } from "effect/unstable/observability"
 import { Flag } from "../flag/flag"
-import { InstallationChannel, InstallationVersion } from "../installation/version"
+import { InstallationChannel, OcarinaVersion } from "../installation/version"
 import { runID } from "./shared"
 
 const endpoint = Flag.OTEL_EXPORTER_OTLP_ENDPOINT
@@ -35,13 +35,13 @@ function resourceAttributes() {
 
 export function resource(): { serviceName: string; serviceVersion: string; attributes: Record<string, string> } {
   return {
-    serviceName: "opencode",
-    serviceVersion: InstallationVersion,
+    serviceName: "ocarina",
+    serviceVersion: OcarinaVersion,
     attributes: {
       ...resourceAttributes(),
       "deployment.environment.name": InstallationChannel,
-      "opencode.client": Flag.OPENCODE_CLIENT,
-      "opencode.run": runID,
+      "ocarina.client": Flag.OPENCODE_CLIENT,
+      "ocarina.run": runID,
       "service.instance.id": runID,
     },
   }

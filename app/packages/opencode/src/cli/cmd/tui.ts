@@ -61,10 +61,14 @@ async function input(value?: string) {
   return piped + "\n" + value
 }
 
-export function resolveThreadDirectory(project?: string, envPWD = process.env.PWD, cwd = process.cwd()) {
+export function resolveThreadDirectory(
+  project?: string,
+  envPWD = process.env.OCARINA_PROJECT_DIR ?? process.env.PWD ?? process.env.HOME,
+  cwd = process.cwd(),
+) {
   const root = Filesystem.resolve(envPWD ?? cwd)
   if (project) return Filesystem.resolve(path.isAbsolute(project) ? project : path.join(root, project))
-  return Filesystem.resolve(cwd)
+  return Filesystem.resolve(envPWD ?? cwd)
 }
 
 export const TuiThreadCommand = cmd({
@@ -90,75 +94,84 @@ export const TuiThreadCommand = cmd({
       .option("prompt", {
         type: "string",
         describe: "prompt to use",
+      })
+      .option("directory", {
+        alias: ["d"],
+        type: "string",
+        describe: "project folder to open",
       }),
   handler: async (args) => {
     const unguard = win32InstallCtrlCGuard()
     try {
       const { TuiConfig } = await import("@/config/tui")
 
-      const next = resolveThreadDirectory()
       const file = await target()
-      try {
-        process.chdir(next)
-      } catch {
-        UI.error("Failed to change directory to " + next)
-        return
-      }
-      const cwd = Filesystem.resolve(process.cwd())
-
-      const worker = new Worker(file, {
-        env: Object.fromEntries(
-          Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-        ),
-      })
-      const client = Rpc.client<typeof rpc>(worker)
-      const reload = () => {
-        client.call("reload", undefined).catch(() => {})
-      }
-      process.on("SIGUSR2", reload)
-
-      let stopped = false
-      const stop = async () => {
-        if (stopped) return
-        stopped = true
-        process.off("SIGUSR2", reload)
-        await withTimeout(client.call("shutdown", undefined), 5000).catch(() => {})
-        worker.terminate()
-      }
-
       const prompt = await input(args.prompt)
-      const config = await TuiConfig.get()
 
-      const transport = {
-        url: "http://opencode.internal",
-        fetch: createWorkerFetch(client),
-        events: createEventSource(client),
-        headers: undefined,
-      }
+      const [{ Effect }, { run }, { createLegacyTuiPluginHost }] = await Promise.all([
+        import("effect"),
+        import("../tui/layer"),
+        import("@/plugin/tui/runtime"),
+      ])
 
-      try {
-        await validateSession({
-          url: transport.url,
-          sessionID: args.session,
-          directory: cwd,
-          fetch: transport.fetch,
-          headers: transport.headers,
+      let directory = resolveThreadDirectory(args.directory)
+      let first = true
+
+      while (true) {
+        try {
+          process.chdir(directory)
+        } catch {
+          UI.error("Failed to change directory to " + directory)
+          process.exitCode = 1
+          return
+        }
+        const cwd = Filesystem.resolve(process.cwd())
+        const config = await TuiConfig.get()
+
+        const worker = new Worker(file, {
+          env: Object.fromEntries(
+            Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          ),
         })
-      } catch (error) {
-        UI.error(errorMessage(error))
-        process.exitCode = 1
-        return
-      }
+        const client = Rpc.client<typeof rpc>(worker)
+        const reload = () => {
+          client.call("reload", undefined).catch(() => {})
+        }
+        process.on("SIGUSR2", reload)
 
-      setTimeout(() => {
-        client.call("checkUpgrade", { directory: cwd }).catch(() => {})
-      }, 1000).unref?.()
+        let stopped = false
+        const stop = async () => {
+          if (stopped) return
+          stopped = true
+          process.off("SIGUSR2", reload)
+          await withTimeout(client.call("shutdown", undefined), 5000).catch(() => {})
+          worker.terminate()
+        }
 
-      try {
-        const { Effect } = await import("effect")
-        const { run } = await import("../tui/layer")
-        const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")
-        await Effect.runPromise(
+        const transport = {
+          url: "http://opencode.internal",
+          fetch: createWorkerFetch(client),
+          events: createEventSource(client),
+          headers: undefined,
+        }
+
+        if (first) {
+          try {
+            await validateSession({
+              url: transport.url,
+              sessionID: args.session,
+              directory: cwd,
+              fetch: transport.fetch,
+              headers: transport.headers,
+            })
+          } catch (error) {
+            UI.error(errorMessage(error))
+            process.exitCode = 1
+            return
+          }
+        }
+
+        const result = (await Effect.runPromise(
           run({
             url: transport.url,
             async onSnapshot() {
@@ -173,15 +186,27 @@ export const TuiThreadCommand = cmd({
             headers: transport.headers,
             events: transport.events,
             args: {
-              continue: args.continue,
-              sessionID: args.session,
+              continue: first ? args.continue : undefined,
+              sessionID: first ? args.session : undefined,
               model: args.model,
-              prompt,
+              prompt: first ? prompt : undefined,
             },
           }),
-        )
-      } finally {
-        await stop()
+        ).finally(async () => {
+          await stop()
+        })) as unknown as { epilogue?: string; reason?: unknown }
+
+        if (
+          result.reason &&
+          typeof result.reason === "object" &&
+          (result.reason as { type?: string }).type === "reopen"
+        ) {
+          directory = (result.reason as { directory: string }).directory
+          first = false
+          continue
+        }
+
+        break
       }
     } finally {
       try {
