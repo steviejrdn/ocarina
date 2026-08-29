@@ -1,4 +1,4 @@
-Explore this project and create CONTEXT.md with its research context. Use the task tool to delegate to context-writer for file creation.
+Explore this project and create CONTEXT.md with its research context.
 
 The goal is a persistent reference file for this and future sessions. User-provided focus or constraints (honor these):
 $ARGUMENTS
@@ -24,7 +24,7 @@ Do NOT read or summarize numeric or statistics data files (CSV, Excel, SPSS, SAS
 ## Workflow
 
 1. Delegate to explore to gather project context
-2. Delegate to context-writer to create CONTEXT.md with findings
+2. Create CONTEXT.md with the gathered findings using the edit tool
 3. Report to user that CONTEXT.md has been created
 
 ## Rules
