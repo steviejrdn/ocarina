@@ -3,12 +3,18 @@ import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { Question } from "@/question"
 import { QuestionTool } from "./question"
 import { WebFetchTool } from "./webfetch"
+import { ReadTool } from "./read"
+import { GlobTool } from "./glob"
+import { GrepTool } from "./grep"
+import { TaskTool } from "./task"
 import * as Tool from "./tool"
 import { Plugin } from "../plugin"
 import { WebSearchTool } from "./websearch"
+import { EditTool } from "./edit"
 import * as Truncate from "./truncate"
-import { Effect, Layer, Context, Schema } from "effect"
+import { Effect, Layer, Context, Schema, Scope } from "effect"
 import { InstanceState } from "@/effect/instance-state"
+import type { InstanceContext } from "@/project/instance-context"
 import { Agent } from "../agent/agent"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -20,7 +26,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
  * at registry construction and again when definitions are materialized for a
  * model; configuration, plugins, and MCP cannot extend it.
  */
-export const RESEARCH_TOOL_ALLOWLIST = ["webfetch", "websearch", "question"] as const
+export const RESEARCH_TOOL_ALLOWLIST = ["webfetch", "websearch", "question", "read", "glob", "grep", "task", "edit"] as const
 const researchToolAllowlist = new Set<string>(RESEARCH_TOOL_ALLOWLIST)
 
 export function isResearchTool(id: string) {
@@ -54,30 +60,45 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ToolRegistry") {}
 
+function disabled(id: string): Tool.Def {
+  return {
+    id,
+    description: `${id} is disabled in the Ocarina runtime.`,
+    parameters: Schema.Unknown,
+    execute: () => Effect.die(new Tool.DisabledError({ tool: id })),
+  }
+}
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const plugin = yield* Plugin.Service
 
-    const question = yield* QuestionTool
-    const webfetch = yield* WebFetchTool
-    const websearch = yield* WebSearchTool
-    const state = yield* InstanceState.make<State>(
-      Effect.fn("ToolRegistry.state")(function* () {
-        // Do not scan config directories or plugin registrations here. Those
-        // are untrusted extension points and are intentionally unavailable in
-        // research mode.
-        const tool = yield* Effect.all({
-          fetch: Tool.init(webfetch),
-          search: Tool.init(websearch),
-          question: Tool.init(question),
-        })
+    const questionInfo = yield* QuestionTool
+    const webfetchInfo = yield* WebFetchTool
+    const websearchInfo = yield* WebSearchTool
+
+    const initFn = (() =>
+      Effect.gen(function* () {
+        const question = yield* Tool.init(questionInfo)
+        const webfetch = yield* Tool.init(webfetchInfo)
+        const websearch = yield* Tool.init(websearchInfo)
+        const readInfo = yield* ReadTool
+        const read = yield* Tool.init(readInfo)
+        const globInfo = yield* GlobTool
+        const glob = yield* Tool.init(globInfo)
+        const grepInfo = yield* GrepTool
+        const grep = yield* Tool.init(grepInfo)
+        const taskInfo = yield* TaskTool
+        const task = yield* Tool.init(taskInfo)
+        const editInfo = yield* EditTool
+        const edit = yield* Tool.init(editInfo)
 
         return {
-          builtin: [tool.fetch, tool.search, tool.question],
+          builtin: [webfetch, websearch, question, read, glob, grep, task, edit],
         }
-      }),
-    )
+      })) as (ctx: InstanceContext) => Effect.Effect<State, never, Scope.Scope>
+    const state = yield* InstanceState.make<State>(initFn)
 
     const all: Interface["all"] = Effect.fn("ToolRegistry.all")(function* () {
       const s = yield* InstanceState.get(state)
@@ -118,9 +139,10 @@ const layer = Layer.effect(
     })
 
     const named: Interface["named"] = Effect.fn("ToolRegistry.named")(function* () {
+      const s = yield* InstanceState.get(state)
       return {
-        task: disabled("task"),
-        read: disabled("read"),
+        task: s.builtin.find((t) => t.id === "task") ?? disabled("task"),
+        read: s.builtin.find((t) => t.id === "read") ?? disabled("read"),
       }
     })
 
@@ -140,14 +162,5 @@ export const node = LayerNode.make({
     RuntimeFlags.node,
   ],
 })
-
-function disabled(id: string): Tool.Def {
-  return {
-    id,
-    description: `${id} is disabled in the Ocarina runtime.`,
-    parameters: Schema.Unknown,
-    execute: () => Effect.die(new Tool.DisabledError({ tool: id })),
-  }
-}
 
 export * as ToolRegistry from "./registry"
