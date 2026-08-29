@@ -55,7 +55,18 @@ fi
 # the direct Ocarina executable with another binary.
 for key in "${!OPENCODE_@}"; do unset "${key}"; done
 
-bun_bin="$(command -v bun || true)"
+vendored_bun="${root_dir}/.tools/bun"
+if [[ ! -x "${vendored_bun}" ]]; then
+  "${root_dir}/scripts/ensure-bun" >&2 || {
+    echo "ocarina: failed to ensure bun runtime" >&2
+    exit 1
+  }
+fi
+bun_bin="${vendored_bun}"
+
+if [[ ! -x "${bun_bin}" ]]; then
+  bun_bin="$(command -v bun || true)"
+fi
 if [[ -z "${bun_bin}" && -x "${root_dir}/.tools-latest/node_modules/.bin/bun" ]]; then
   bun_bin="${root_dir}/.tools-latest/node_modules/.bin/bun"
 fi

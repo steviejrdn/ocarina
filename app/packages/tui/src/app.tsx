@@ -46,6 +46,7 @@ import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogSessionList } from "./component/dialog-session-list"
 import { DialogOpenProject } from "./component/dialog-open-project"
+import { DialogPrompt } from "./ui/dialog-prompt"
 import { ThemeProvider, useTheme } from "./context/theme"
 import { Home } from "./routes/home"
 import { Session } from "./routes/session"
@@ -327,6 +328,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       process.stderr.write((cliErrorMessage(result.reason) ?? errorFormat(result.reason)) + "\n")
     if (result.epilogue) process.stdout.write(result.epilogue + "\n")
   })
+  return result
 })
 
 function App() {
@@ -497,6 +499,32 @@ function App() {
         slashName: "open",
         run: () => {
           dialog.replace(() => <DialogOpenProject />)
+        },
+      },
+      {
+        name: "project.save",
+        title: "Save current project",
+        category: "Project",
+        slashName: "save",
+        run: async () => {
+          const directory = process.cwd()
+          const name = await DialogPrompt.show(dialog, "Save current project", {
+            placeholder: "project name",
+            description: () => <text fg={theme.textMuted}>{directory}</text>,
+          })
+          if (!name) return
+          const trimmed = name.trim()
+          if (!trimmed) {
+            toast.show({ title: "Invalid project name", message: "Project name cannot be empty", variant: "error" })
+            return
+          }
+          const { SavedProjects } = await import("@opencode-ai/core/saved-projects")
+          await SavedProjects.save({ name: trimmed, directory })
+          toast.show({
+            title: `Saved project ${trimmed}`,
+            message: directory,
+            variant: "success",
+          })
         },
       },
       ...Array.from({ length: 9 }, (_, i) => ({

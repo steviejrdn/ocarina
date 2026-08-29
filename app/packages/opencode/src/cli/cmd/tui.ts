@@ -99,6 +99,11 @@ export const TuiThreadCommand = cmd({
         alias: ["d"],
         type: "string",
         describe: "project folder to open",
+      })
+      .option("project", {
+        alias: ["p"],
+        type: "string",
+        describe: "saved project name to open",
       }),
   handler: async (args) => {
     const unguard = win32InstallCtrlCGuard()
@@ -115,6 +120,16 @@ export const TuiThreadCommand = cmd({
       ])
 
       let directory = resolveThreadDirectory(args.directory)
+      if (args.project) {
+        const { SavedProjects } = await import("@opencode-ai/core/saved-projects")
+        const resolved = await SavedProjects.resolve(args.project)
+        if (!resolved) {
+          UI.error(`Saved project not found: ${args.project}`)
+          process.exitCode = 1
+          return
+        }
+        directory = Filesystem.resolve(resolved)
+      }
       let first = true
 
       while (true) {

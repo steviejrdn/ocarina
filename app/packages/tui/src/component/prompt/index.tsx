@@ -113,6 +113,10 @@ export function Prompt(props: PromptProps) {
   const stash = usePromptStash()
   const keymap = useOpencodeKeymap()
   const paletteShortcut = useCommandShortcut("command.palette.show")
+  const projectName = createMemo(() => {
+    const directory = project.instance.directory() || paths.cwd
+    return directory.split(/[\\/]/).filter(Boolean).at(-1) ?? "workspace"
+  })
   const renderer = useRenderer()
   const exit = useExit()
   const dimensions = useTerminalDimensions()
@@ -1174,12 +1178,19 @@ export function Prompt(props: PromptProps) {
                       )}
                     </Match>
                     <Match when={true}>
-                      <text fg={theme.textMuted}>Research session</text>
+                      <text fg={theme.textMuted}>
+                        {props.sessionID ? "Research session" : `Project: ${projectName()}`}
+                      </text>
                     </Match>
                   </Switch>
                   <text fg={theme.text}>
                     {paletteShortcut()} <span style={{ fg: theme.textMuted }}>commands</span>
                   </text>
+                  <Show when={!props.sessionID}>
+                    <text fg={theme.text}>
+                      Resume <span style={{ fg: theme.textMuted }}>/sessions</span>
+                    </text>
+                  </Show>
                 </Match>
               </Switch>
             </box>

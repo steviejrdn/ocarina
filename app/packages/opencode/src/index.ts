@@ -1,14 +1,17 @@
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { OcarinaVersion } from "@opencode-ai/core/installation/version"
+import { SavedProjects } from "@opencode-ai/core/saved-projects"
 
 const args = hideBin(process.argv)
 const OcarinaVersionString = `Ocarina/${OcarinaVersion}`
 
-const valueOptions = new Set(["--model", "-m", "--session", "-s", "--prompt", "--directory", "-d"])
+const valueOptions = new Set(["--model", "-m", "--session", "-s", "--prompt", "--directory", "-d", "--project", "-p"])
 const flagOptions = new Set(["--help", "-h", "--version", "-v", "--continue", "-c", "--fork"])
 let expectsValue = false
-const invalidArgument = args.some((arg) => {
+let positional: string | undefined
+let positionalIndex = -1
+const invalidArgument = args.some((arg, index) => {
   if (expectsValue) {
     expectsValue = false
     return false
@@ -23,15 +26,29 @@ const invalidArgument = args.some((arg) => {
     arg.startsWith("--session=") ||
     arg.startsWith("--prompt=") ||
     arg.startsWith("--directory=") ||
+    arg.startsWith("--project=") ||
     flagOptions.has(arg)
   )
     return false
-  return true
+  if (arg.startsWith("-")) return true
+  if (positional !== undefined) return true
+  positional = arg
+  positionalIndex = index
+  return false
 })
 
 try {
   if (invalidArgument) {
     throw new Error("positional project paths are not supported; upstream CLI options are not supported")
+  }
+
+  // Resolve a positional argument (a saved project name) to its directory.
+  if (positional) {
+    const directory = await SavedProjects.resolve(positional)
+    if (!directory) {
+      throw new Error(`saved project not found: ${positional}`)
+    }
+    args.splice(positionalIndex, 1, "--directory", directory)
   }
 
   // Keep the TUI and its worker graph out of fail-closed argument paths.

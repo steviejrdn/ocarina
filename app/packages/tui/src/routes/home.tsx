@@ -1,6 +1,6 @@
 import { Prompt, type PromptRef } from "../component/prompt"
 import { TextAttributes } from "@opentui/core"
-import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onMount } from "solid-js"
 import { Logo } from "../component/logo"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
@@ -39,7 +39,6 @@ export function Home() {
     if (configured === "auto") return Math.max(75, Math.floor(dimensions().width * 0.7))
     return configured ?? 75
   })
-  const hasSessions = createMemo(() => sync.data.session.length > 0)
   let sent = false
 
   onMount(() => {
@@ -102,14 +101,6 @@ export function Home() {
                   />
                 </pluginRuntime.Slot>
               </box>
-            </box>
-            <box flexDirection="row" gap={2} marginTop={3}>
-              <text fg={theme.textMuted}>ctrl+p commands</text>
-              <text fg={theme.textMuted}>
-                <span style={{ fg: theme.text }}>Resume</span>
-                {" "}/sessions
-                <Show when={hasSessions()}> · continue a previous thread</Show>
-              </text>
             </box>
           </box>
         </box>
