@@ -3,3 +3,11 @@
 /AGENTS.md
 .tools/
 /plan/
+.opencode/
+tools/data-processor/venv/
+tools/data-processor/__pycache__/
+tools/data-processor/engine/__pycache__/
+tools/data-processor/tests/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
