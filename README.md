@@ -2,7 +2,7 @@
   <img src="ocarina-logo.svg" alt="Ocarina" width="40%">
 </p>
 
-![Ocarina preview](https://i.imgur.com/eZhfR4j.gif)
+![Ocarina preview](ocarina-preview.gif)
 
 # Ocarina
 
