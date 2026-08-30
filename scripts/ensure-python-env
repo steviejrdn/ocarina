@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ensures a Python virtualenv with the data-processing stack exists in the
+# Ocarina runtime dir. The `python` tool resolves its interpreter to
+# <runtime>/venv/bin/python when present (override with OCARINA_PYTHON).
+#
+# Usage: scripts/ensure-python-env [runtime_dir]
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+runtime_dir="${1:-${OCARINA_RUNTIME_DIR:-${root_dir}/runtime}}"
+venv_dir="${runtime_dir}/venv"
+venv_python="${venv_dir}/bin/python"
+
+# Sync the data-processor engine library into the runtime dir so the `python`
+# tool's sandbox can import it from an isolated location (refreshed each run).
+engine_src="${root_dir}/tools/data-processor/engine"
+engine_dst="${runtime_dir}/engine"
+if [[ -d "${engine_src}" ]]; then
+  mkdir -p "${engine_dst}"
+  cp -r "${engine_src}/." "${engine_dst}/"
+fi
+
+if [[ -x "${venv_python}" ]]; then
+  "${venv_python}" -c "import pandas, numpy, scipy, statsmodels" 2>/dev/null && exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ocarina: python3 is required to build the data-processing environment" >&2
+  exit 1
+fi
+
+echo "ocarina: creating Python data-processing environment at ${venv_dir}" >&2
+python3 -m venv "${venv_dir}"
+
+echo "ocarina: installing pandas, numpy, scipy, statsmodels, pyreadstat, openpyxl, chardet..." >&2
+"${venv_dir}/bin/pip" install --quiet --disable-pip-version-check \
+  pandas numpy scipy statsmodels pyreadstat openpyxl chardet
+
+echo "ocarina: Python data-processing environment ready" >&2

@@ -12,6 +12,8 @@ import { ProviderTransform } from "@/provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
+import PROMPT_DATA_PROCESSOR from "./prompt/data-processor.txt"
+import PROMPT_ANALYZE from "./prompt/analyze.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
@@ -125,6 +127,7 @@ const layer = Layer.effect(
           question: "allow",
           task: "allow",
           edit: "allow",
+          python: "allow",
           doom_loop: "deny",
           external_directory: {
             "*": "ask",
@@ -172,6 +175,50 @@ const layer = Layer.effect(
             ),
             description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
             prompt: PROMPT_EXPLORE,
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          "data-processor": {
+            name: "data-processor",
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                "*": "deny",
+                glob: "allow",
+                grep: "allow",
+                list: "allow",
+                python: "allow",
+                read: {
+                  "*": "allow",
+                  "*.env": "deny",
+                  "*.env.*": "deny",
+                },
+                external_directory: "deny",
+              }),
+              user,
+            ),
+            description:
+              'Reads and processes statistical data files (CSV, TSV, Excel XLS/XLSM/XLSB/XLSX, SPSS SAV/SPV/POR/SPS, SAS SAS/SAS7BDAT/SAS7BCAT/XPT, Stata DTA, R RDA/RDATA/RDS, JSON/JSONL/NDJSON) and returns structured metadata and computed cross-tabulations. Delegate all statistical data file processing to this agent.',
+            prompt: PROMPT_DATA_PROCESSOR,
+            options: {},
+            mode: "subagent",
+            native: true,
+          },
+          analyze: {
+            name: "analyze",
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                "*": "deny",
+                task: "deny",
+                external_directory: "deny",
+              }),
+              user,
+            ),
+            description:
+              "Analyzes structured data results (metadata, crosstabs, summaries) produced by the data-processor subagent. Identifies patterns, trends, significant findings, and provides interpretive insights. Delegate all interpretation of processed data results to this agent.",
+            prompt: PROMPT_ANALYZE,
             options: {},
             mode: "subagent",
             native: true,

@@ -1,0 +1,31 @@
+Executes a snippet of Python code for statistical and data computation, then returns the program's stdout and stderr.
+
+## When to use
+
+- Computing cross-tabulations, frequencies, percentages, or summary statistics from survey or tabular data
+- Running statistical tests (chi-square, t-tests, regression) and extracting fit statistics such as pseudo R-squared (Cox & Snell, Nagelkerke, McFadden) from logistic regression models
+- Reading CSV, Excel, SPSS (SAV), Stata (DTA), or SAS data with pandas and returning structured results
+- Any computation you cannot do reliably by hand
+
+## Behavior
+
+- The code runs with the project directory as the working directory, so relative file paths resolve against the data files in the project.
+- The standard scientific stack is available: pandas, numpy, scipy, statsmodels, pyreadstat, openpyxl.
+- A survey data-processing engine is pre-imported, so these names are available directly: `DataProcessor`, `load_csv`, `load_excel`, `load_sav`, `detect_column_types`, `create_crosstab`, `calculate_frequencies`, `calculate_base`, `parse_code_def`, `evaluate_code_def`, `validate_code_def`, `compute_proportion_significance`, `compute_total_significance`. Use `DataProcessor` for high-level workflows (load, vars, crosstab, significance); code-expression DSL: `Var/code`, `+` OR, `.` AND, `!` NOT.
+- Output is captured from stdout and stderr. Return results as compact printed output (e.g., one line per result, or a small DataFrame summary). Do not print entire large tables.
+- The code runs in a sandbox: network access, subprocesses, and dangerous modules are blocked. Imports outside the allowed set fail with a clear error.
+- A `timeout` can be supplied in seconds; the default is 300 seconds (5 minutes). Long-running computations will be terminated at the timeout.
+
+## Parameters
+
+- `code`: the Python source to execute. Write self-contained code that prints the result.
+- `timeout` (optional): maximum runtime in seconds (default 300).
+
+## Example
+
+```python
+import pandas as pd
+df = pd.read_csv("survey.csv")
+ct = pd.crosstab(df["P5_1"], df["brand"])
+print(ct.to_string())
+```

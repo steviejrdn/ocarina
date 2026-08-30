@@ -11,6 +11,7 @@ import * as Tool from "./tool"
 import { Plugin } from "../plugin"
 import { WebSearchTool } from "./websearch"
 import { EditTool } from "./edit"
+import { PythonTool } from "./python"
 import * as Truncate from "./truncate"
 import { Effect, Layer, Context, Schema, Scope } from "effect"
 import { InstanceState } from "@/effect/instance-state"
@@ -26,7 +27,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
  * at registry construction and again when definitions are materialized for a
  * model; configuration, plugins, and MCP cannot extend it.
  */
-export const RESEARCH_TOOL_ALLOWLIST = ["webfetch", "websearch", "question", "read", "glob", "grep", "task", "edit"] as const
+export const RESEARCH_TOOL_ALLOWLIST = ["webfetch", "websearch", "question", "read", "glob", "grep", "task", "edit", "python"] as const
 const researchToolAllowlist = new Set<string>(RESEARCH_TOOL_ALLOWLIST)
 
 export function isResearchTool(id: string) {
@@ -93,9 +94,11 @@ const layer = Layer.effect(
         const task = yield* Tool.init(taskInfo)
         const editInfo = yield* EditTool
         const edit = yield* Tool.init(editInfo)
+        const pythonInfo = yield* PythonTool
+        const python = yield* Tool.init(pythonInfo)
 
         return {
-          builtin: [webfetch, websearch, question, read, glob, grep, task, edit],
+          builtin: [webfetch, websearch, question, read, glob, grep, task, edit, python],
         }
       })) as (ctx: InstanceContext) => Effect.Effect<State, never, Scope.Scope>
     const state = yield* InstanceState.make<State>(initFn)

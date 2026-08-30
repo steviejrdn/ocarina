@@ -31,6 +31,22 @@ fi
 
 mkdir -p "${runtime_dir}"/{config,data,state,cache,logs,tmp,home}
 
+# Expose the repo's .ocarina config (agents, modes, commands) to Ocarina's
+# config discovery from any project directory. The app walks up from the
+# runtime HOME looking for .ocarina, so a symlink there makes custom agents
+# available globally without touching the project the user launched from.
+repo_ocarina="${root_dir}/.ocarina"
+home_ocarina="${runtime_dir}/home/.ocarina"
+if [[ -d "${repo_ocarina}" ]] && { [[ -L "${home_ocarina}" ]] || [[ ! -e "${home_ocarina}" ]]; }; then
+  ln -sfn "${repo_ocarina}" "${home_ocarina}"
+fi
+
+# Ensure the Python data-processing venv exists and the engine library is
+# synced into the runtime (installs on first use, refreshes engine each run).
+"${root_dir}/scripts/ensure-python-env" "${runtime_dir}" >&2 || {
+  echo "ocarina: python tool will fall back to python3; some packages may be missing" >&2
+}
+
 export OCARINA_RUNTIME_DIR="${runtime_dir}"
 export OCARINA_REAL_HOME="${real_home}"
 export OCARINA_PROJECT_DIR="${project_dir}"
