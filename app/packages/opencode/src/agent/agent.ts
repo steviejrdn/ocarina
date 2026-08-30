@@ -12,7 +12,6 @@ import { ProviderTransform } from "@/provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
-import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
@@ -124,6 +123,8 @@ const layer = Layer.effect(
           webfetch: "allow",
           websearch: "allow",
           question: "allow",
+          task: "allow",
+          edit: "allow",
           doom_loop: "deny",
           external_directory: {
             "*": "ask",
@@ -151,20 +152,6 @@ const layer = Layer.effect(
             mode: "primary",
             native: true,
             prompt: PROMPT_OCARINA,
-          },
-          general: {
-            name: "general",
-            description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-            permission: Permission.merge(
-              defaults,
-              Permission.fromConfig({
-                todowrite: "deny",
-              }),
-              user,
-            ),
-            options: {},
-            mode: "subagent",
-            native: true,
           },
           explore: {
             name: "explore",
@@ -211,6 +198,10 @@ const layer = Layer.effect(
             native: true,
             hidden: true,
             temperature: 0.5,
+            model: {
+              providerID: ProviderV2.ID.make("opencode"),
+              modelID: ModelV2.ID.make("big-pickle"),
+            },
             permission: Permission.merge(
               defaults,
               Permission.fromConfig({
@@ -219,21 +210,6 @@ const layer = Layer.effect(
               user,
             ),
             prompt: PROMPT_TITLE,
-          },
-          summary: {
-            name: "summary",
-            mode: "primary",
-            options: {},
-            native: true,
-            hidden: true,
-            permission: Permission.merge(
-              defaults,
-              Permission.fromConfig({
-                "*": "deny",
-              }),
-              user,
-            ),
-            prompt: PROMPT_SUMMARY,
           },
         }
 
