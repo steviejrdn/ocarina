@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ocarina-logo.svg" alt="Image 1" width="60%">
+  <img src="ocarina-logo.svg" alt="Image 1" width="40%">
 </p>
 
 # Ocarina
