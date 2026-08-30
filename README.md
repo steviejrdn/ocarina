@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ocarina-logo.png" alt="Image 1">
+  <img src="ocarina-logo.svg" alt="Image 1">
 </p>
 
 # Ocarina
