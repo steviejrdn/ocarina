@@ -1,0 +1,281 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ocarina installer — https://github.com/steviejrdn/ocarina
+#
+# Installs the self-contained `ocarina` binary plus the Python data-processing
+# engine. Requires only curl or wget (and tar/unzip); Bun/Node are not needed.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/steviejrdn/ocarina/main/scripts/install | bash
+#   OCARINA_VERSION=0.1.0 bash <(curl -fsSL https://raw.githubusercontent.com/steviejrdn/ocarina/main/scripts/install)
+#   bash install --version 0.1.0 --install-dir /custom/bin
+#
+# Env overrides:
+#   OCARINA_VERSION      version to install (default: latest release)
+#   OCARINA_INSTALL_DIR  explicit install directory (top priority)
+#   OCARINA_RUNTIME_DIR  runtime dir for engine/venv (default ~/.local/share/ocarina)
+#   OCARINA_REPO         GitHub repo for releases (default steviejrdn/ocarina)
+#   OCARINA_BASE_URL      override the download base URL (mirrors/testing)
+#   XDG_BIN_DIR           alternative install directory
+
+REPO="${OCARINA_REPO:-steviejrdn/ocarina}"
+BASE_URL="https://github.com/${REPO}/releases/download"
+LATEST_URL="https://github.com/${REPO}/releases/latest/download"
+VERSION="${OCARINA_VERSION:-latest}"
+INSTALL_DIR_ARG=""
+
+usage() {
+  cat <<EOF
+Ocarina installer
+
+Usage: install [options]
+
+Options:
+  --version <ver>    Version to install (e.g. 0.1.0). Default: latest release.
+  --install-dir <d>  Install directory. Overrides OCARINA_INSTALL_DIR.
+  --repo <owner/repo> GitHub repo to download from. Overrides OCARINA_REPO.
+  -h, --help         Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      VERSION="${2:?--version requires a value}"
+      shift 2
+      ;;
+    --version=*) VERSION="${1#*=}"; shift ;;
+    --install-dir)
+      INSTALL_DIR_ARG="${2:?--install-dir requires a value}"
+      shift 2
+      ;;
+    --install-dir=*) INSTALL_DIR_ARG="${1#*=}"; shift ;;
+    --repo)
+      REPO="${2:?--repo requires a value}"
+      shift 2
+      ;;
+    --repo=*) REPO="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "install: unknown argument: $1" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+# ─── Platform detection ────────────────────────────────────────────────────
+
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+case "${OS}" in
+  linux) OS="linux" ;;
+  darwin) OS="darwin" ;;
+  mingw*|msys*|cygwin*|windowsnt*) OS="windows" ;;
+  *) echo "install: unsupported OS: ${OS}" >&2; exit 1 ;;
+esac
+
+case "${ARCH}" in
+  x86_64|amd64) ARCH="x64" ;;
+  aarch64|arm64) ARCH="arm64" ;;
+  *) echo "install: unsupported architecture: ${ARCH}" >&2; exit 1 ;;
+esac
+
+detect_musl() {
+  if [[ -f /etc/alpine-release ]]; then return 0; fi
+  if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then return 0; fi
+  return 1
+}
+
+supports_avx2() {
+  if [[ "${ARCH}" != "x64" ]]; then return 0; fi
+  case "${OS}" in
+    linux)
+      [[ -f /proc/cpuinfo ]] || return 1
+      grep -qiE '(^|\s)avx2(\s|$)' /proc/cpuinfo 2>/dev/null
+      ;;
+    darwin)
+      [[ "$(sysctl -n hw.optional.avx2_0 2>/dev/null || echo 0)" == "1" ]]
+      ;;
+    windows)
+      local out
+      out="$(powershell.exe -NoProfile -NonInteractive -Command '(Add-Type -MemberDefinition "[DllImport(\"kernel32.dll\")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)' 2>/dev/null || true)"
+      [[ "${out}" == "1" || "${out}" =~ ^[Tt]rue$ ]]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+MUSL=""
+if [[ "${OS}" == "linux" ]] && detect_musl; then MUSL="-musl"; fi
+BASELINE=""
+if [[ "${ARCH}" == "x64" ]] && ! supports_avx2; then BASELINE="-baseline"; fi
+
+ASSET="ocarina-${OS}-${ARCH}${BASELINE}${MUSL}"
+if [[ "${OS}" == "linux" ]]; then
+  EXT="tar.gz"
+else
+  EXT="zip"
+fi
+ASSET_FILE="${ASSET}.${EXT}"
+if [[ "${OS}" == "windows" ]]; then BIN_NAME="ocarina.exe"; else BIN_NAME="ocarina"; fi
+
+echo "Ocarina installer"
+echo "  OS: ${OS}  Arch: ${ARCH}${BASELINE}${MUSL}  Asset: ${ASSET_FILE}  Version: ${VERSION}"
+
+# ─── Resolve install dir ───────────────────────────────────────────────────
+
+resolve_install_dir() {
+  if [[ -n "${INSTALL_DIR_ARG:-}" ]]; then echo "${INSTALL_DIR_ARG}"; return; fi
+  if [[ -n "${OCARINA_INSTALL_DIR:-}" ]]; then echo "${OCARINA_INSTALL_DIR}"; return; fi
+  if [[ -n "${XDG_BIN_DIR:-}" ]]; then echo "${XDG_BIN_DIR}"; return; fi
+  if [[ -n "${HOME:-}" && -d "${HOME}/.local/bin" ]]; then echo "${HOME}/.local/bin"; return; fi
+  if [[ -n "${HOME:-}" && -d "${HOME}/bin" ]]; then echo "${HOME}/bin"; return; fi
+  echo "${HOME:-$HOME}/.local/bin"
+}
+INSTALL_DIR="$(resolve_install_dir)"
+RUNTIME_DIR="${OCARINA_RUNTIME_DIR:-${HOME}/.local/share/ocarina}"
+
+# ─── Download + verify ─────────────────────────────────────────────────────
+
+download() {
+  local url="$1" out="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "${url}" -o "${out}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q "${url}" -O "${out}"
+  else
+    echo "install: curl or wget is required" >&2
+    exit 1
+  fi
+}
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+EXTRACT_DIR="${TMP_DIR}/extract"
+
+if [[ -n "${OCARINA_BASE_URL:-}" ]]; then
+  DOWNLOAD_BASE="${OCARINA_BASE_URL}"
+elif [[ "${VERSION}" == "latest" ]]; then
+  DOWNLOAD_BASE="${LATEST_URL}"
+else
+  DOWNLOAD_BASE="${BASE_URL}/v${VERSION}"
+fi
+
+echo "  Downloading ${DOWNLOAD_BASE}/${ASSET_FILE}"
+download "${DOWNLOAD_BASE}/${ASSET_FILE}" "${TMP_DIR}/${ASSET_FILE}"
+
+if download "${DOWNLOAD_BASE}/SHASUMS256.txt" "${TMP_DIR}/SHASUMS256.txt" 2>/dev/null; then
+  EXPECTED="$(awk -v a="${ASSET_FILE}" '$2 == a { print $1; exit }' "${TMP_DIR}/SHASUMS256.txt" || true)"
+  if [[ -n "${EXPECTED}" ]]; then
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL="$(sha256sum "${TMP_DIR}/${ASSET_FILE}" | awk '{print $1}')"
+    elif command -v shasum >/dev/null 2>&1; then
+      ACTUAL="$(shasum -a 256 "${TMP_DIR}/${ASSET_FILE}" | awk '{print $1}')"
+    else
+      ACTUAL=""
+    fi
+    if [[ -n "${ACTUAL}" && "${ACTUAL}" != "${EXPECTED}" ]]; then
+      echo "install: SHA256 verification failed for ${ASSET_FILE}" >&2
+      exit 1
+    fi
+    echo "  SHA256 verified"
+  else
+    echo "  WARNING: ${ASSET_FILE} not found in SHASUMS256.txt; skipping verification"
+  fi
+else
+  echo "  WARNING: could not fetch SHASUMS256.txt; skipping verification"
+fi
+
+mkdir -p "${EXTRACT_DIR}"
+case "${EXT}" in
+  tar.gz) tar -xzf "${TMP_DIR}/${ASSET_FILE}" -C "${EXTRACT_DIR}" ;;
+  zip)
+    if command -v unzip >/dev/null 2>&1; then
+      unzip -q "${TMP_DIR}/${ASSET_FILE}" -d "${EXTRACT_DIR}"
+    else
+      echo "install: unzip is required" >&2
+      exit 1
+    fi
+    ;;
+esac
+
+# ─── Install binary ────────────────────────────────────────────────────────
+
+BIN_SRC="$(find "${EXTRACT_DIR}" -maxdepth 1 -type f -name "${BIN_NAME}*" | head -n 1)"
+if [[ -z "${BIN_SRC}" ]]; then
+  echo "install: ${BIN_NAME} not found in archive" >&2
+  exit 1
+fi
+
+mkdir -p "${INSTALL_DIR}"
+install -m 755 "${BIN_SRC}" "${INSTALL_DIR}/${BIN_NAME}"
+echo "  Installed ${INSTALL_DIR}/${BIN_NAME}"
+
+if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
+  echo "  NOTE: ${INSTALL_DIR} is not on your PATH."
+  echo "        Add it with: export PATH=\"${INSTALL_DIR}:\$PATH\""
+fi
+
+# ─── Runtime: engine + requirements ────────────────────────────────────────
+
+mkdir -p "${RUNTIME_DIR}"
+if [[ -d "${EXTRACT_DIR}/engine" ]]; then
+  rm -rf "${RUNTIME_DIR}/engine"
+  cp -r "${EXTRACT_DIR}/engine" "${RUNTIME_DIR}/engine"
+fi
+if [[ -f "${EXTRACT_DIR}/requirements.txt" ]]; then
+  cp "${EXTRACT_DIR}/requirements.txt" "${RUNTIME_DIR}/requirements.txt"
+fi
+
+# ─── Python detection + data-processor deps ────────────────────────────────
+
+detect_python() {
+  local cmd="" version=""
+  if command -v python3 >/dev/null 2>&1; then
+    cmd="python3"
+  elif command -v python >/dev/null 2>&1; then
+    python -c "import sys; assert sys.version_info >= (3, 9)" 2>/dev/null && cmd="python"
+  fi
+  if [[ -z "${cmd}" ]]; then
+    echo "  WARNING: Python 3.9+ not found. Data-processor features will be limited."
+    echo "           Install Python: https://www.python.org/downloads/"
+    return 1
+  fi
+  version="$("${cmd}" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")"
+  local major="${version%%.*}" minor="${version#*.}"
+  minor="${minor%%.*}"
+  if (( major < 3 )) || { (( major == 3 )) && (( minor < 9 )); }; then
+    echo "  WARNING: Python ${version} found, but 3.9+ is required. Data-processor features will be limited."
+    return 1
+  fi
+  echo "${cmd}"
+}
+
+if [[ -f "${RUNTIME_DIR}/requirements.txt" ]]; then
+  if PY_CMD="$(detect_python)"; then
+    echo "  Setting up Python environment (${PY_CMD})..."
+    if "${PY_CMD}" -m venv "${RUNTIME_DIR}/venv" 2>/dev/null; then
+      pip_bin=""
+      if [[ -x "${RUNTIME_DIR}/venv/bin/pip" ]]; then
+        pip_bin="${RUNTIME_DIR}/venv/bin/pip"
+      elif [[ -x "${RUNTIME_DIR}/venv/Scripts/pip.exe" ]]; then
+        pip_bin="${RUNTIME_DIR}/venv/Scripts/pip.exe"
+      fi
+      if [[ -n "${pip_bin}" ]] && "${pip_bin}" install --quiet --disable-pip-version-check -r "${RUNTIME_DIR}/requirements.txt"; then
+        echo "  Python dependencies installed to ${RUNTIME_DIR}/venv"
+      else
+        echo "  WARNING: failed to install Python dependencies. Data-processor features will be limited."
+      fi
+    else
+      echo "  WARNING: failed to create virtualenv. Data-processor features will be limited."
+    fi
+  fi
+fi
+
+# ─── Done ──────────────────────────────────────────────────────────────────
+
+if "${INSTALL_DIR}/${BIN_NAME}" --version >/dev/null 2>&1; then
+  echo "  Ocarina installed successfully:"
+  echo "    $("${INSTALL_DIR}/${BIN_NAME}" --version)"
+else
+  echo "  Ocarina installed, but the binary did not respond to --version."
+fi

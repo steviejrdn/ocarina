@@ -127,7 +127,7 @@ const layer = Layer.effect(
           question: "allow",
           task: "allow",
           edit: "allow",
-          python: "allow",
+          python: "deny",
           doom_loop: "deny",
           external_directory: {
             "*": "ask",

@@ -151,7 +151,7 @@ export const PythonTool = Tool.define(
       const venv = path.join(
         GlobalPath.runtime,
         "venv",
-        "bin",
+        process.platform === "win32" ? "Scripts" : "bin",
         process.platform === "win32" ? "python.exe" : "python",
       )
       if (yield* fs.existsSafe(venv)) return venv

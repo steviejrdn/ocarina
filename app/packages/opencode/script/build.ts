@@ -2,6 +2,7 @@
 
 import { $ } from "bun"
 import path from "path"
+import { existsSync } from "fs"
 import { fileURLToPath } from "url"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 
@@ -17,13 +18,15 @@ import { Script } from "@opencode-ai/script"
 import pkg from "../package.json"
 
 const OcarinaVersion = process.env["OCARINA_VERSION"] ?? "0.1.0"
+const binaryName = "ocarina"
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
-const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const webAppDir = path.join(import.meta.dirname, "../../app")
+const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui") || !existsSync(webAppDir)
 
 const createEmbeddedWebUIBundle = async () => {
   console.log(`Building Web UI to embed in the binary`)
@@ -146,7 +149,7 @@ if (!skipInstall) {
 }
 for (const item of targets) {
   const name = [
-    pkg.name,
+    binaryName,
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -176,8 +179,8 @@ for (const item of targets) {
       autoloadDotenv: false,
       autoloadTsconfig: true,
       autoloadPackageJson: true,
-      target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/opencode`,
+      target: name.replace(binaryName, "bun") as any,
+      outfile: `dist/${name}/bin/${binaryName}`,
       execArgv: [`--user-agent=ocarina/${OcarinaVersion}`, "--use-system-ca", "--"],
       windows: {},
     },
@@ -206,7 +209,7 @@ for (const item of targets) {
 
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/opencode`
+    const binaryPath = `dist/${name}/bin/${binaryName}`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
@@ -237,10 +240,15 @@ for (const item of targets) {
 
 if (Script.release) {
   for (const key of Object.keys(binaries)) {
+    const pkgDir = `dist/${key}/pkg`
+    await $`mkdir -p ${pkgDir}`
+    await $`cp dist/${key}/bin/${binaryName}* ${pkgDir}/`
+    await $`cp -r ../../../tools/data-processor/engine ${pkgDir}/engine`
+    await $`cp ../../../tools/data-processor/requirements.txt ${pkgDir}/requirements.txt`
     if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
+      await $`tar -czf ../../${key}.tar.gz *`.cwd(pkgDir)
     } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
+      await $`zip -r ../../${key}.zip *`.cwd(pkgDir)
     }
   }
   await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber --repo ${process.env.GH_REPO}`
