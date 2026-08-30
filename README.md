@@ -1,4 +1,6 @@
-![Image 1](ocarina_logo.png)
+<p align="center">
+  <img src="ocarina_logo.png" alt="Image 1">
+</p>
 
 # Ocarina
 
