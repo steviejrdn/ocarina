@@ -1,8 +1,8 @@
 <p align="center">
   <img src="ocarina-logo.svg" alt="Ocarina" width="40%">
-  <br>
-  <img src="https://i.imgur.com/eZhfR4j.gif" alt="Ocarina preview" width="100%">
 </p>
+
+![Ocarina preview](https://i.imgur.com/eZhfR4j.gif)
 
 # Ocarina
 
