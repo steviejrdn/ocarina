@@ -1,5 +1,6 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
+import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Question } from "@/question"
 import { QuestionTool } from "./question"
 import { WebFetchTool } from "./webfetch"
@@ -157,6 +158,7 @@ export const node = LayerNode.make({
   service: Service,
   layer,
   deps: [
+    CrossSpawnSpawner.node,
     Plugin.node,
     Question.node,
     Agent.node,
