@@ -1,7 +1,7 @@
 <p align="center">
   <img src="ocarina-logo.svg" alt="Ocarina" width="40%">
   <br>
-  <video src="https://i.imgur.com/eZhfR4j.mp4" autoplay loop muted playsinline width="100%"></video>
+  <img src="https://i.imgur.com/eZhfR4j.gif" alt="Ocarina preview" width="100%">
 </p>
 
 # Ocarina
