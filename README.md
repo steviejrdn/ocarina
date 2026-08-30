@@ -1,5 +1,7 @@
 # Ocarina
 
+![Ocarina logo](ocarina_logo.png)
+
 Ocarina is a command-line AI agent built specifically for market research. Built on top of [OpenCode](https://github.com/anomalyco/opencode) and powered by the [Opentab](https://github.com/steviejrdn/opentab) headless engine for statistical data processing, it provides a terminal user interface (TUI) that orchestrates specialized subagents to read project documents, process survey and statistical data, and analyze results — no code involved.
 
 ## Why Ocarina?
