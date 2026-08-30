@@ -1,7 +1,7 @@
 <p align="center">
   <img src="ocarina-logo.svg" alt="Image 1" width="40%">
   <br>
-  <img src="ocarina-preview.gif" alt="Ocarina preview" width="100%">
+  <img src="ocarina-preview.gif" alt="Ocarina preview" width="50%">
 </p>
 
 # Ocarina
