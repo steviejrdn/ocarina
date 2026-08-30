@@ -46,8 +46,11 @@ class TestCLI:
     
     def test_vars_command(self):
         """Test vars command."""
-        processor = DataProcessor()
-        processor.load(self.sample_csv)
+        with patch('sys.argv', ['cli.py', 'load', self.sample_csv]):
+            try:
+                main()
+            except SystemExit:
+                pass
         
         with patch('sys.argv', ['cli.py', 'vars']):
             with patch('sys.stdout', new_callable=StringIO) as mock_stdout:

@@ -146,14 +146,29 @@ def detect_column_types(df):
                         'is_valid': len(non_null) == base_count,
                     }
                 else:
-                    metadata[col] = {
-                        'type': 'numeric',
-                        'answer_type': 'single_answer',
-                        'codes': unique_vals,
-                        'response_count': len(non_null),
-                        'base_count': base_count,
-                        'is_valid': len(non_null) == base_count
-                    }
+                    is_categorical = (
+                        all(float(v).is_integer() for v in unique_vals)
+                        and len(unique_vals) > 1
+                        and unique_vals == list(range(int(unique_vals[0]), int(unique_vals[-1]) + 1))
+                    )
+                    if is_categorical:
+                        metadata[col] = {
+                            'type': 'categorical',
+                            'answer_type': 'single_answer',
+                            'codes': [{'code': str(int(v)), 'label': str(int(v))} for v in unique_vals],
+                            'response_count': len(non_null),
+                            'base_count': base_count,
+                            'is_valid': len(non_null) == base_count
+                        }
+                    else:
+                        metadata[col] = {
+                            'type': 'numeric',
+                            'answer_type': 'single_answer',
+                            'codes': unique_vals,
+                            'response_count': len(non_null),
+                            'base_count': base_count,
+                            'is_valid': len(non_null) == base_count
+                        }
                 continue
         except Exception:
             pass
@@ -270,7 +285,7 @@ def load_sav(path):
     for col in df.columns:
         if col not in metadata:
             continue
-        if var_measure_map.get(col) == 'scale' and metadata[col]['type'] == 'numeric':
+        if var_measure_map.get(col) == 'scale' and metadata[col]['type'] in ('numeric', 'categorical'):
             numeric_col = pd.to_numeric(df[col], errors='coerce').dropna()
             if len(numeric_col) == 0:
                 continue

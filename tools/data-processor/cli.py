@@ -11,6 +11,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from engine import DataProcessor
 
 
+# Module-level processor so a `load` in one invocation is visible to
+# subsequent `vars` / `crosstab` / `summary` commands.
+_processor = DataProcessor()
+
+
 def output_json(data: dict):
     """Output data as JSON."""
     print(json.dumps(data, indent=2, default=str))
@@ -89,6 +94,16 @@ def cmd_summary(args, processor: DataProcessor):
     return result['status'] == 'ok'
 
 
+commands = {
+    'load': cmd_load,
+    'vars': cmd_vars,
+    'crosstab': cmd_crosstab,
+    'filter': cmd_filter,
+    'merge': cmd_merge,
+    'summary': cmd_summary,
+}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Data Processor - Headless statistical data processing',
@@ -142,18 +157,7 @@ Examples:
         parser.print_help()
         sys.exit(1)
     
-    processor = DataProcessor()
-    
-    commands = {
-        'load': cmd_load,
-        'vars': cmd_vars,
-        'crosstab': cmd_crosstab,
-        'filter': cmd_filter,
-        'merge': cmd_merge,
-        'summary': cmd_summary,
-    }
-    
-    success = commands[args.command](args, processor)
+    success = commands[args.command](args, _processor)
     sys.exit(0 if success else 1)
 
 

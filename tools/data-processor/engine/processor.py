@@ -30,14 +30,17 @@ class DataProcessor:
         """
         ext = file_path.lower().rsplit('.', 1)[-1] if '.' in file_path else ''
         
-        if ext in ('csv', 'txt'):
-            self.df, self.metadata = load_csv(file_path, encoding=encoding)
-        elif ext == 'xlsx':
-            self.df, self.metadata = load_excel(file_path, sheet_name=sheet_name)
-        elif ext == 'sav':
-            self.df, self.metadata = load_sav(file_path)
-        else:
-            raise ValueError(f"Unsupported file format: {ext}. Use CSV, XLSX, or SAV.")
+        try:
+            if ext in ('csv', 'txt'):
+                self.df, self.metadata = load_csv(file_path, encoding=encoding)
+            elif ext == 'xlsx':
+                self.df, self.metadata = load_excel(file_path, sheet_name=sheet_name)
+            elif ext == 'sav':
+                self.df, self.metadata = load_sav(file_path)
+            else:
+                raise ValueError(f"Unsupported file format: {ext}. Use CSV, XLSX, or SAV.")
+        except (FileNotFoundError, ValueError) as e:
+            return {"status": "error", "error": str(e)}
         
         self.file_name = file_path
         self.merged_variables = {}
