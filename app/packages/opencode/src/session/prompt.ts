@@ -41,7 +41,6 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
 import { decodeDataUrl } from "@/util/data-url"
-import { Process } from "@/util/process"
 import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { TaskTool, type TaskPromptOps } from "@/tool/task"
@@ -203,14 +202,38 @@ const layer = Layer.effect(
       providerID: ProviderV2.ID
       modelID: ModelV2.ID
     }) {
-      if (input.session.parentID) return
-      if (!Session.isDefaultTitle(input.session.title)) return
+      yield* Effect.logDebug("title: start", {
+        "session.id": input.session.id,
+        parentID: input.session.parentID ?? "none",
+        title: input.session.title,
+        providerID: input.providerID,
+        modelID: input.modelID,
+        historyCount: input.history.length,
+      })
+
+      if (input.session.parentID) {
+        yield* Effect.logDebug("title: skip - child session", { parentID: input.session.parentID })
+        return
+      }
+      if (!Session.isDefaultTitle(input.session.title)) {
+        yield* Effect.logDebug("title: skip - title already customized", { title: input.session.title })
+        return
+      }
 
       const real = (m: SessionV1.WithParts) =>
         m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
       const idx = input.history.findIndex(real)
-      if (idx === -1) return
-      if (input.history.filter(real).length !== 1) return
+      if (idx === -1) {
+        yield* Effect.logDebug("title: skip - no real user message found", {
+          historyRoles: input.history.map((m) => m.info.role),
+        })
+        return
+      }
+      const realCount = input.history.filter(real).length
+      if (realCount !== 1) {
+        yield* Effect.logDebug("title: skip - not exactly 1 real user message", { realCount })
+        return
+      }
 
       const context = input.history.slice(0, idx + 1)
       const firstUser = context[idx]
@@ -221,14 +244,35 @@ const layer = Layer.effect(
       const onlySubtasks = subtasks.length > 0 && firstUser.parts.every((p) => p.type === "subtask")
 
       const ag = yield* agents.get("title")
-      if (!ag) return
+      if (!ag) {
+        yield* Effect.logWarning("title: skip - title agent not found")
+        return
+      }
+      yield* Effect.logDebug("title: agent resolved", { agent: ag.name })
+
+      yield* Effect.logDebug("title: resolving model", {
+        hasAgModel: !!ag.model,
+        agModelID: ag.model?.modelID ?? "none",
+        agProviderID: ag.model?.providerID ?? "none",
+      })
+
       const mdl = ag.model
         ? yield* provider.getModel(ag.model.providerID, ag.model.modelID)
         : ((yield* provider.getSmallModel(input.providerID)) ??
           (yield* provider.getModel(input.providerID, input.modelID)))
+
+      yield* Effect.logDebug("title: model resolved", { modelID: mdl.id, providerID: mdl.providerID })
+
       const msgs = onlySubtasks
         ? [{ role: "user" as const, content: subtasks.map((p) => p.prompt).join("\n") }]
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
+
+      yield* Effect.logDebug("title: calling LLM", {
+        messagesCount: msgs.length,
+        modelID: mdl.id,
+        small: true,
+      })
+
       const text = yield* llm
         .stream({
           agent: ag,
@@ -247,13 +291,21 @@ const layer = Layer.effect(
           Stream.mkString,
           Effect.orDie,
         )
+
+      yield* Effect.logDebug("title: raw response", { raw: text.slice(0, 200) })
+
       const cleaned = text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
         .split("\n")
         .map((line) => line.trim())
         .find((line) => line.length > 0)
-      if (!cleaned) return
+      if (!cleaned) {
+        yield* Effect.logDebug("title: skip - empty cleaned result", { raw: text.slice(0, 200) })
+        return
+      }
       const t = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
+
+      yield* Effect.logInfo("title: setting title", { sessionID: input.session.id, title: t })
       yield* sessions
         .setTitle({ sessionID: input.session.id, title: t })
         .pipe(Effect.catchCause((cause) => Effect.logError("failed to generate title", { error: Cause.squash(cause) })))
@@ -1143,7 +1195,11 @@ const layer = Layer.effect(
               modelID: lastUser.model.modelID,
               providerID: lastUser.model.providerID,
               history: msgs,
-            }).pipe(Effect.ignore, Effect.forkIn(scope))
+            }).pipe(
+              Effect.tapError((error) => Effect.logError("title generation failed", { error })),
+              Effect.ignore,
+              Effect.forkIn(scope),
+            )
 
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const task = tasks.pop()
@@ -1367,9 +1423,6 @@ const layer = Layer.effect(
     })
 
     const command = Effect.fn("SessionPrompt.command")(function* (input: CommandInput) {
-      void input
-      return yield* new CommandDisabledError()
-      /*
       yield* Effect.logInfo("command", {
         "session.id": input.sessionID,
         command: input.command,
@@ -1410,17 +1463,13 @@ const layer = Layer.effect(
         template = template + "\n\n" + input.arguments
       }
 
-      const shellMatches = ConfigMarkdown.shell(template)
-      if (shellMatches.length > 0) {
-        const cfg = yield* config.get()
-        const sh = Shell.preferred(cfg.shell)
-        const results = yield* Effect.promise(() =>
-          Promise.all(
-            shellMatches.map(async ([, cmd]) => (await Process.text([cmd], { shell: sh, nothrow: true })).text),
-          ),
-        )
-        let index = 0
-        template = template.replace(bashRegex, () => results[index++])
+      // Research-only: deny command templates that embed shell commands.
+      if (ConfigMarkdown.shell(template).length > 0) {
+        const error = new NamedError.Unknown({
+          message: `Command "/${input.command}" embeds a shell command, which is disabled in research-only mode.`,
+        })
+        yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+        throw error
       }
       template = template.trim()
 
@@ -1494,7 +1543,6 @@ const layer = Layer.effect(
         messageID: result.info.id,
       })
       return result
-      */
     })
 
     return Service.of({
@@ -1606,7 +1654,6 @@ export function createStructuredOutputTool(input: {
     },
   })
 }
-const bashRegex = /!`([^`]+)`/g
 // Match [Image N] as single token, quoted strings, or non-space sequences
 const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
 const placeholderRegex = /\$(\d+)/g

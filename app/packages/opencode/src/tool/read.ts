@@ -192,8 +192,6 @@ export const ReadTool = Tool.define<
         case ".jar":
         case ".war":
         case ".7z":
-        case ".doc":
-        case ".docx":
         case ".xls":
         case ".xlsx":
         case ".ppt":
@@ -303,14 +301,13 @@ export const ReadTool = Tool.define<
       const mime = sniffAttachmentMime(sample, FSUtil.mimeType(filepath))
       const isImage = SUPPORTED_IMAGE_MIMES.has(mime)
 
-      if (isImage || isPdfAttachment(mime)) {
+      if (isImage) {
         const bytes = yield* fs.readFile(filepath)
-        const msg = isPdfAttachment(mime) ? "PDF read successfully" : "Image read successfully"
         return {
           title,
-          output: msg,
+          output: "Image read successfully",
           metadata: {
-            preview: msg,
+            preview: "Image read successfully",
             truncated: false,
             loaded: loaded.map((item) => item.filepath),
           },
@@ -321,6 +318,46 @@ export const ReadTool = Tool.define<
               url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
             },
           ],
+        }
+      }
+
+      if (isPdfAttachment(mime)) {
+        const bytes = yield* fs.readFile(filepath)
+        const pdfParseModule = yield* Effect.promise(() => import("pdf-parse"))
+        const pdfParse = pdfParseModule.default
+        const data: { text: string } = yield* Effect.promise(() => pdfParse(Buffer.from(bytes)))
+        let output = [`<path>${filepath}</path>`, `<type>file</type>`, "<content>\n"].join("\n")
+        output += data.text
+        output += "\n</content>"
+        return {
+          title,
+          output,
+          metadata: {
+            preview: data.text.slice(0, 500),
+            truncated: false,
+            loaded: loaded.map((item) => item.filepath),
+          },
+        }
+      }
+
+      const ext = path.extname(filepath).toLowerCase()
+      if (ext === ".docx") {
+        const bytes = yield* fs.readFile(filepath)
+        const mammoth = yield* Effect.promise(() => import("mammoth"))
+        const result: { value: string } = yield* Effect.promise(() =>
+          mammoth.extractRawText({ buffer: Buffer.from(bytes) }),
+        )
+        let output = [`<path>${filepath}</path>`, `<type>file</type>`, "<content>\n"].join("\n")
+        output += result.value
+        output += "\n</content>"
+        return {
+          title,
+          output,
+          metadata: {
+            preview: result.value.slice(0, 500),
+            truncated: false,
+            loaded: loaded.map((item) => item.filepath),
+          },
         }
       }
 

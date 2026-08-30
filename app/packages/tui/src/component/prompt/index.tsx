@@ -671,7 +671,7 @@ export function Prompt(props: PromptProps) {
       return true
     }
     const localCommand = trimmed.match(/^\/([^\s]+)\s*$/)?.[1] as keyof typeof OCARINA_LOCAL_SLASH_COMMANDS | undefined
-    if (localCommand) {
+    if (localCommand && OCARINA_LOCAL_SLASH_COMMANDS[localCommand]) {
       keymap.dispatchCommand(OCARINA_LOCAL_SLASH_COMMANDS[localCommand])
       return true
     }

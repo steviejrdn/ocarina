@@ -43,7 +43,10 @@ const BACKGROUND_UPDATED = [
 const BaseParameterFields = {
   description: Schema.String.annotate({ description: "A short (3-5 words) description of the task" }),
   prompt: Schema.String.annotate({ description: "The task for the agent to perform" }),
-  subagent_type: Schema.String.annotate({ description: "The type of specialized agent to use for this task" }),
+  subagent_type: Schema.String.annotate({
+    description:
+      "The name of the agent to delegate to. Use the agent's registered name (e.g. 'explore', 'data-processor', 'analyze', or any custom agent defined in configuration). Check available agents before calling.",
+  }),
   task_id: Schema.optional(Schema.String).annotate({
     description:
       "This should only be set if you mean to resume a previous task (you can pass a prior task_id and the task will continue the same subagent session as before instead of creating a fresh one)",
@@ -366,6 +369,13 @@ export const TaskTool = Tool.define(
       jsonSchema: flags.experimentalBackgroundSubagents ? undefined : ToolJsonSchema.fromSchema(BaseParameters),
       execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context) =>
         run(params, ctx).pipe(Effect.orDie),
+      formatValidationError: (error: unknown) => {
+        const base = "Task tool parameter error. Required: description (string), prompt (string), subagent_type (string — must match a registered agent name)."
+        if (error instanceof Error) {
+          return `${base} Details: ${error.message}`
+        }
+        return base
+      },
     }
   }),
 )

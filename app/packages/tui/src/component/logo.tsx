@@ -11,7 +11,7 @@ export function Logo() {
 
   return (
     <box alignItems="flex-start" aria-label="Ocarina">
-      <box flexDirection="row" gap={2} alignItems="center">
+      <box flexDirection="row" gap={2} alignItems="flex-end">
         <Show
           when={wideEnough()}
           fallback={

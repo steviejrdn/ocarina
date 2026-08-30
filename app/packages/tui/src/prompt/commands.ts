@@ -84,6 +84,7 @@ export const OCARINA_COMMAND_ALLOWLIST = new Set([
 ])
 
 export const OCARINA_SLASH_ALLOWLIST = new Set([
+  "init",
   "new",
   "clear",
   "sessions",

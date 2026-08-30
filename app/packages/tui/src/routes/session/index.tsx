@@ -671,6 +671,8 @@ export function Session() {
                 model={local.model.parsed().model}
                 sessions={recentSessions()}
                 selected={route.sessionID}
+                sync={sync}
+                sessionID={route.sessionID}
               />
             </Show>
             <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
@@ -766,15 +768,181 @@ export function Session() {
   )
 }
 
+function toolToActivity(tool: string): string {
+  switch (tool) {
+    case "task":
+      return "delegating"
+    case "read":
+    case "glob":
+    case "grep":
+    case "list":
+      return "exploring"
+    case "edit":
+    case "write":
+      return "editing"
+    case "bash":
+      return "running command"
+    case "webfetch":
+    case "websearch":
+      return "researching"
+    case "todowrite":
+      return "planning"
+    case "question":
+      return "asking"
+    case "skill":
+      return "loading skill"
+    default:
+      return tool
+  }
+}
+
+type AgentActivity = { name: string; activity: string }
+
+function deriveActivity(
+  sync: ReturnType<typeof useSync>,
+  sessionID: string | undefined,
+): AgentActivity[] {
+  if (!sessionID) return []
+  const status = sync.data.session_status[sessionID]
+  const messages = sync.data.message[sessionID] ?? []
+  const lastAssistant = messages.findLast((m) => m.role === "assistant")
+  const parts = lastAssistant ? (sync.data.part[lastAssistant.id] ?? []) : []
+
+  const result: AgentActivity[] = []
+  const mainName = "ocarina"
+
+  if (!status || status.type === "idle") {
+    result.push({ name: mainName, activity: "idle" })
+    return result
+  }
+
+  if (status.type === "retry") {
+    result.push({ name: mainName, activity: `retrying (${status.attempt})` })
+    return result
+  }
+
+  // status.type === "busy" — derive from parts
+  const lastPart = parts[parts.length - 1]
+
+  // Check for active subtask via tool="task" parts (subagent delegation)
+  const taskToolParts = parts.filter(
+    (p): p is ToolPart => p.type === "tool" && p.tool === "task",
+  )
+  const activeTask = taskToolParts.findLast(
+    (p) => p.state.status === "running" || p.state.status === "completed",
+  )
+
+  if (activeTask) {
+    const subSessionID =
+      activeTask.state.status === "running"
+        ? stringValue(activeTask.state.metadata?.sessionId)
+        : activeTask.state.status === "completed"
+          ? stringValue(activeTask.state.metadata?.sessionId)
+          : undefined
+
+    if (subSessionID) {
+      const subMessages = sync.data.message[subSessionID] ?? []
+      const subLast = subMessages.findLast((m) => m.role === "assistant")
+      const subParts = subLast ? (sync.data.part[subLast.id] ?? []) : []
+      const subLastPart = subParts[subParts.length - 1]
+
+      // Get agent name from the task tool input
+      const subName = stringValue(activeTask.state.input?.subagent_type) || "subagent"
+
+      let subActivity = "working"
+      if (subLastPart) {
+        if (subLastPart.type === "reasoning") {
+          subActivity = "thinking"
+        } else if (subLastPart.type === "tool") {
+          const tp = subLastPart as ToolPart
+          if (tp.state.status === "running" || tp.state.status === "completed") {
+            subActivity = toolToActivity(tp.tool)
+          }
+        } else if (subLastPart.type === "text") {
+          subActivity = "responding"
+        }
+      }
+
+      result.push({ name: mainName, activity: "delegating" })
+      result.push({ name: subName, activity: subActivity })
+      return result
+    }
+  }
+
+  // No subtask — derive main agent activity from last part
+  let activity = "processing"
+
+  if (lastPart) {
+    switch (lastPart.type) {
+      case "reasoning": {
+        const rp = lastPart as ReasoningPart
+        activity = rp.time.end ? "thought" : "thinking"
+        break
+      }
+      case "tool": {
+        const tp = lastPart as ToolPart
+        if (tp.state.status === "running") {
+          activity = toolToActivity(tp.tool)
+        } else if (tp.state.status === "completed") {
+          activity = toolToActivity(tp.tool)
+        } else {
+          activity = "waiting"
+        }
+        break
+      }
+      case "text":
+        activity = "responding"
+        break
+      case "step-start":
+        activity = "starting step"
+        break
+      case "step-finish":
+        activity = "finishing step"
+        break
+      case "subtask":
+        activity = "delegating"
+        break
+    }
+  }
+
+  result.push({ name: mainName, activity })
+  return result
+}
+
+const DOTS = [".", "..", "..."]
+
+function AnimatedDots(props: { color?: RGBA }) {
+  const kv = useKV()
+  const [frame, setFrame] = createSignal(0)
+
+  let timer: ReturnType<typeof setInterval> | undefined
+
+  onMount(() => {
+    if (kv.get("animations_enabled", true)) {
+      timer = setInterval(() => setFrame((f) => (f + 1) % DOTS.length), 500)
+    }
+  })
+
+  onCleanup(() => {
+    if (timer) clearInterval(timer)
+  })
+
+  return <text fg={props.color}>{DOTS[frame()]}</text>
+}
+
 function WorkbenchRail(props: {
   directory: string
   agent?: string
   model: string
   sessions: ReturnType<typeof useSync>["data"]["session"]
   selected: string
+  sync: ReturnType<typeof useSync>
+  sessionID: string
 }) {
   const { theme } = useTheme()
   const projectName = createMemo(() => props.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? "workspace")
+
+  const activities = createMemo(() => deriveActivity(props.sync, props.sessionID))
 
   return (
     <box
@@ -790,7 +958,7 @@ function WorkbenchRail(props: {
       <box>
         <For each={ocarinaMark}>
           {(line) => (
-            <text fg={theme.primary} selectable={false} wrapMode="none">
+            <text fg={theme.text} selectable={false} wrapMode="none">
               {line}
             </text>
           )}
@@ -807,10 +975,20 @@ function WorkbenchRail(props: {
       </box>
       <box>
         <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
-          AGENT
+          STATUS
         </text>
-        <text fg={theme.text}>{props.agent ?? "Research"}</text>
-        <text fg={theme.textMuted}>{props.model || "No model"}</text>
+        <For each={activities()}>
+          {(entry) => (
+            <box flexDirection="row">
+              <text fg={theme.text} wrapMode="none">
+                {entry.name} is {entry.activity}
+              </text>
+              <Show when={entry.activity !== "idle"}>
+                <AnimatedDots color={theme.textMuted} />
+              </Show>
+            </box>
+          )}
+        </For>
       </box>
       <box>
         <text fg={theme.textMuted} attributes={TextAttributes.DIM}>
